@@ -86,7 +86,7 @@ class Assign(Node):
 class FBCall(Node):
     instance: str
     inputs: dict[str, Node]  # upper-case input name -> expression
-    outputs: dict[str, Name]  # upper-case output name -> target variable (=>)
+    outputs: dict[str, "Name | Path"]  # upper-case output name -> target (=>)
 
 
 @dataclass
@@ -186,4 +186,7 @@ class Program(Node):
     body: list[Node]
     function_blocks: list[FunctionBlockDecl] = field(default_factory=list)
     types: list[TypeDecl] = field(default_factory=list)
+    # Siemens SCL: start values from DATA_BLOCK BEGIN sections, global DBs visible in all blocks
+    startup: list[Node] = field(default_factory=list)
+    dialect: str = "ST"
     functions: list[FunctionDecl] = field(default_factory=list)

@@ -1,21 +1,21 @@
 {
   "title": "IT-OT vPLC – Feature-Katalog",
-  "generated": "2026-11-26T15:38:32+00:00",
+  "generated": "2026-11-26T16:32:17+00:00",
   "reports": [
     "catalog-junit.xml",
     "nodered-junit.xml",
     "pytest-junit.xml"
   ],
   "stats": {
-    "features": 50,
-    "proven": 50,
+    "features": 51,
+    "proven": 51,
     "review": 5,
     "areas": 10,
     "areasDone": 10,
     "errors": 0,
     "warnings": 0,
-    "criteria": 140,
-    "evidence": 130,
+    "criteria": 145,
+    "evidence": 136,
     "components": 36
   },
   "areas": [
@@ -79,6 +79,11 @@
           "id": "programmierung.bausteine",
           "title": "Eigene Bausteine",
           "summary": "Funktionen und Funktionsbausteine im eigenen Quelltext."
+        },
+        {
+          "id": "programmierung.tia",
+          "title": "Import aus dem TIA Portal",
+          "summary": "SCL-Quellen, wie das TIA Portal sie aus Bausteinen erzeugt."
         },
         {
           "id": "programmierung.pruefung",
@@ -540,7 +545,7 @@
             "zugelassen"
           ],
           "found": true,
-          "line": 90,
+          "line": 91,
           "has_assertion": true,
           "status_only": false,
           "related": true,
@@ -763,6 +768,7 @@
             "tests/test_operation_api.py:74",
             "tests/test_operation_api.py:87",
             "tests/test_programs_api.py:23",
+            "tests/test_scl_import.py:158",
             "tests/test_stream_api.py:38",
             "tests/test_stream_api.py:55",
             "tests/test_stream_api.py:78",
@@ -774,9 +780,9 @@
           "id": "GET /api/plcs",
           "summary": "list_plcs",
           "callers": [
-            "tests/test_api.py:92",
             "tests/test_api.py:93",
             "tests/test_api.py:94",
+            "tests/test_api.py:95",
             "tests/test_operation_api.py:44",
             "tests/test_operation_api.py:97",
             "tests/test_operation_api.py:49"
@@ -1355,7 +1361,8 @@
           "id": "POST /api/plcs/{plc_id}/reset",
           "summary": "reset",
           "callers": [
-            "tests/test_operation_api.py:68"
+            "tests/test_operation_api.py:68",
+            "tests/test_scl_import.py:163"
           ]
         }
       ],
@@ -1586,6 +1593,7 @@
             "tests/test_operation_api.py:62",
             "tests/test_operation_api.py:57",
             "tests/test_operation_api.py:76",
+            "tests/test_scl_import.py:159",
             "tests/test_stream_api.py:39"
           ]
         }
@@ -4713,7 +4721,8 @@
           "id": "POST /api/check",
           "summary": "check",
           "callers": [
-            "tests/test_api.py:86"
+            "tests/test_api.py:86",
+            "tests/test_scl_import.py:156"
           ]
         }
       ],
@@ -4805,7 +4814,8 @@
           "id": "GET /api/info",
           "summary": "info",
           "callers": [
-            "tests/test_api.py:82"
+            "tests/test_api.py:82",
+            "tests/test_scl_import.py:154"
           ]
         },
         {
@@ -4813,7 +4823,8 @@
           "summary": "example",
           "callers": [
             "tests/test_api.py:85",
-            "tests/test_api.py:87"
+            "tests/test_api.py:88",
+            "tests/test_scl_import.py:155"
           ]
         }
       ],
@@ -5175,6 +5186,7 @@
             "tests/test_api.py:47",
             "tests/test_arrays_protocols.py:111",
             "tests/test_operation_api.py:69",
+            "tests/test_scl_import.py:164",
             "tests/test_stream_api.py:47",
             "tests/test_structs_strings.py:252"
           ]
@@ -5196,7 +5208,7 @@
       ],
       "rules": [
         "Rekursion (auch über andere Funktionen) wird abgelehnt.",
-        "Funktionen haben keine VAR_OUTPUT und keine Bausteininstanzen; lokale Variablen beginnen bei jedem Aufruf neu."
+        "Funktionen enthalten keine Bausteininstanzen; lokale Variablen und Ausgänge beginnen bei jedem Aufruf neu."
       ],
       "dependsOn": [],
       "technical": {
@@ -5238,7 +5250,7 @@
         {
           "id": "deklaration",
           "kind": "regel",
-          "text": "Reservierte Namen, doppelte Namen, VAR_OUTPUT und Bausteininstanzen in Funktionen sowie ein fehlendes oder doppeltes PROGRAM werden gemeldet.",
+          "text": "Reservierte Namen, doppelte Namen und Bausteininstanzen in Funktionen sowie ein fehlendes oder doppeltes PROGRAM werden gemeldet.",
           "code": null
         }
       ],
@@ -5620,6 +5632,248 @@
       "findings": []
     },
     {
+      "id": "programmierung.scl-import",
+      "title": "SCL-Quellen aus dem TIA Portal laden",
+      "group": "programmierung.tia",
+      "summary": "Lädt SCL-Quellen, wie das TIA Portal sie mit „Aus Bausteinen generieren“ erzeugt – OB, globale und Instanz-DBs, FBs, FCs und UDTs.",
+      "description": "Die vPLC erkennt SCL automatisch. Der zyklische OB wird zum Programm, globale Datenbausteine sind aus allen\nBausteinen erreichbar (`\"Anlage_DB\".Pumpe.Drehzahl`), Instanz-DBs werden zu FB-Instanzen. Startwerte aus dem\nBEGIN-Teil eines DB gelten beim Laden und beim Kaltstart. Lokale Namen mit `#`, `REGION`, Bausteinattribute\n`{ … }`, `TITLE`, `VERSION` und Siemens-Literale wie `W#16#FF` werden verstanden; `TON_TIME`, `IEC_TIMER` und\n`CTU_INT` werden auf die IEC-Bausteine abgebildet. FCs mit `Void` und `VAR_OUTPUT` werden als Anweisung aufgerufen.\n",
+      "usage": [
+        {
+          "channel": "api",
+          "text": "SCL-Text wie Structured Text laden (`PUT …/program`); `POST /api/check` meldet `dialect: SCL`."
+        },
+        {
+          "channel": "cli",
+          "text": "`vplc check pumpenstation.scl` → `OK (SCL)`."
+        }
+      ],
+      "rules": [
+        "Genau ein ORGANIZATION_BLOCK (der zyklische OB); weitere OBs, GOTO und Namen mit Leer- oder Sonderzeichen werden abgelehnt.",
+        "Startwerte in Instanz-DBs werden noch nicht unterstützt.",
+        "Alle Datenbausteine liegen im S7-Abbild gemeinsam in DB1."
+      ],
+      "dependsOn": [],
+      "technical": {
+        "components": [
+          "src/vplc/st/lexer.py",
+          "src/vplc/st/parser.py",
+          "src/vplc/st/compiler.py",
+          "src/vplc/__main__.py"
+        ],
+        "endpoints": [
+          "POST /api/check",
+          "GET /api/examples/{name}"
+        ],
+        "commands": [],
+        "nodes": [],
+        "uiRoutes": [],
+        "notes": [
+          "Beispiel `examples/pumpenstation.scl`."
+        ]
+      },
+      "acceptance": [
+        {
+          "id": "tia-quelle-laeuft",
+          "kind": "effekt",
+          "text": "Die Beispielquelle (auch mit BOM) läuft wie auf der SPS – DB-Startwerte, Anlaufverzögerung, FC-Skalierung und Void-FC mit Ausgängen.",
+          "code": null
+        },
+        {
+          "id": "syntax",
+          "kind": "effekt",
+          "text": "TITLE mit Sonderzeichen, Attribute, AUTHOR/FAMILY/VERSION, REGION mit Umlauten, W#16#/DW#16#/L#, IEC_TIMER und CTU_INT werden verarbeitet.",
+          "code": null
+        },
+        {
+          "id": "globale-dbs",
+          "kind": "effekt",
+          "text": "Globale DBs sind in FCs lesbar und schreibbar; lokale Namen haben Vorrang.",
+          "code": null
+        },
+        {
+          "id": "fehler",
+          "kind": "regel",
+          "text": "Fehlender oder zweiter OB, GOTO, Namen mit Leerzeichen, Startwerte in Instanz-DBs, Void-FC in Ausdrücken und unbekannte DBs werden gemeldet; SCL-Syntax in reinem Structured Text wird abgelehnt.",
+          "code": null
+        },
+        {
+          "id": "api-kaltstart",
+          "kind": "effekt",
+          "text": "Über die API geladen meldet die vPLC den Dialekt SCL; nach einem Kaltstart gelten wieder die DB-Startwerte.",
+          "code": null
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "unit",
+          "file": "tests/test_scl_import.py",
+          "test": "test_tia_source_compiles_and_runs_like_on_the_plc",
+          "covers": [
+            "tia-quelle-laeuft"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_scl_import.py",
+          "test": "test_scl_syntax_elements",
+          "covers": [
+            "syntax"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_scl_import.py",
+          "test": "test_global_data_blocks_are_visible_in_blocks_but_locals_win",
+          "covers": [
+            "globale-dbs"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_scl_import.py",
+          "test": "test_scl_errors",
+          "covers": [
+            "fehler"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_scl_import.py",
+          "test": "test_scl_only_syntax_is_rejected_in_plain_structured_text",
+          "covers": [
+            "fehler"
+          ]
+        },
+        {
+          "kind": "integration",
+          "file": "tests/test_scl_import.py",
+          "test": "test_scl_through_api_with_start_values_and_cold_restart",
+          "covers": [
+            "api-kaltstart"
+          ]
+        }
+      ],
+      "comparisons": {
+        "themenliste": "vplc"
+      },
+      "area": "programmierung",
+      "inReview": false,
+      "status": "nachgewiesen",
+      "uncovered": [],
+      "evidenceResults": [
+        {
+          "file": "tests/test_scl_import.py",
+          "test": "test_tia_source_compiles_and_runs_like_on_the_plc",
+          "kind": "unit",
+          "covers": [
+            "tia-quelle-laeuft"
+          ],
+          "found": true,
+          "line": 19,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_scl_import.py",
+          "test": "test_scl_syntax_elements",
+          "kind": "unit",
+          "covers": [
+            "syntax"
+          ],
+          "found": true,
+          "line": 99,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_scl_import.py",
+          "test": "test_global_data_blocks_are_visible_in_blocks_but_locals_win",
+          "kind": "unit",
+          "covers": [
+            "globale-dbs"
+          ],
+          "found": true,
+          "line": 114,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_scl_import.py",
+          "test": "test_scl_errors",
+          "kind": "unit",
+          "covers": [
+            "fehler"
+          ],
+          "found": true,
+          "line": 125,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_scl_import.py",
+          "test": "test_scl_only_syntax_is_rejected_in_plain_structured_text",
+          "kind": "unit",
+          "covers": [
+            "fehler"
+          ],
+          "found": true,
+          "line": 145,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_scl_import.py",
+          "test": "test_scl_through_api_with_start_values_and_cold_restart",
+          "kind": "integration",
+          "covers": [
+            "api-kaltstart"
+          ],
+          "found": true,
+          "line": 150,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        }
+      ],
+      "endpointInfo": [
+        {
+          "id": "POST /api/check",
+          "summary": "check",
+          "callers": [
+            "tests/test_api.py:86",
+            "tests/test_scl_import.py:156"
+          ]
+        },
+        {
+          "id": "GET /api/examples/{name}",
+          "summary": "example",
+          "callers": [
+            "tests/test_api.py:85",
+            "tests/test_api.py:88",
+            "tests/test_scl_import.py:155"
+          ]
+        }
+      ],
+      "findings": []
+    },
+    {
       "id": "prozessdaten.variablen-lesen",
       "title": "Variablen lesen",
       "group": "prozessdaten.variablen",
@@ -5752,6 +6006,7 @@
             "tests/test_api.py:47",
             "tests/test_arrays_protocols.py:111",
             "tests/test_operation_api.py:69",
+            "tests/test_scl_import.py:164",
             "tests/test_stream_api.py:47",
             "tests/test_structs_strings.py:252"
           ]
@@ -5992,6 +6247,7 @@
             "tests/test_arrays_protocols.py:108",
             "tests/test_arrays_protocols.py:109",
             "tests/test_arrays_protocols.py:106",
+            "tests/test_scl_import.py:162",
             "tests/test_stream_api.py:64",
             "tests/test_structs_strings.py:246",
             "tests/test_structs_strings.py:248",
@@ -6357,6 +6613,7 @@
             "tests/test_operation_api.py:62",
             "tests/test_operation_api.py:57",
             "tests/test_operation_api.py:76",
+            "tests/test_scl_import.py:159",
             "tests/test_stream_api.py:39"
           ]
         }
@@ -6793,7 +7050,7 @@
       "id": "web.programm-editor",
       "title": "Programm-Editor im Browser",
       "group": "web.bedienung",
-      "summary": "Editor mit Zeilennummern, Prüfen-Knopf, Fehlerliste mit Sprung zur Zeile, Beispiel laden, Download mit Kommentar.",
+      "summary": "Editor mit Zeilennummern, Prüfen-Knopf, Fehlerliste mit Sprung zur Zeile, Beispiel laden, Datei öffnen (.st/.scl), Download mit Kommentar.",
       "description": "",
       "usage": [
         {
@@ -7009,7 +7266,7 @@
           "summary": "Steuerungsprogramme laufen als Software und sind über S7 und OPC UA erreichbar.",
           "gaps": [
             "Mehrdimensionale Arrays, VAR_IN_OUT, Aufzählungstypen, WSTRING; Strukturen und Arrays als Baustein-Ein-/Ausgang",
-            "Siemens-SCL-Dialekt und Import aus TIA Portal",
+            "SCL: mehrere OBs (Anlauf, Weckalarme), Startwerte in Instanz-DBs, eigene S7-DB-Nummern je Datenbaustein",
             "Ein Container je vPLC"
           ],
           "features": [
@@ -7038,6 +7295,7 @@
             "programmierung.eigene-funktionen",
             "programmierung.strings",
             "programmierung.strukturen",
+            "programmierung.scl-import",
             "prozessdaten.variablen-lesen",
             "prozessdaten.variable-schreiben",
             "prozessdaten.mehrere-schreiben",

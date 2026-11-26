@@ -12,7 +12,7 @@ letzten Commits; die jeweils aktuelle Ansicht erzeugt jeder CI-Lauf als Artefakt
 
 | | |
 |---|---|
-| Features im Katalog | 50 in 10 Bereichen, alle per bestandenem Test nachgewiesen |
+| Features im Katalog | 51 in 10 Bereichen, alle per bestandenem Test nachgewiesen |
 | Akzeptanzkriterien / Nachweise | jedes Kriterium mit mindestens einem bestandenen Nachweis |
 | Prüfbestand | 5: Weboberfläche (bewusst ohne E2E-Tests) |
 | Bedienwege | `web`, `api`, `s7`, `opcua`, `node-red`, `cli`, `entwicklung` |

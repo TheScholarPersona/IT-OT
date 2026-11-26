@@ -19,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--data", default=os.environ.get("VPLC_DATA", "data"),
                        help="Datenverzeichnis für Programme, Versionen und Audit-Log")
 
-    check = sub.add_parser("check", help="Structured-Text-Datei prüfen")
+    check = sub.add_parser("check", help="Structured-Text- oder SCL-Datei (TIA Portal) prüfen")
     check.add_argument("file")
 
     args = parser.parse_args(argv)
@@ -27,13 +27,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "check":
         from .st import check_source
+        from .st.parser import is_scl
 
-        with open(args.file, encoding="utf-8") as fh:
-            errors = check_source(fh.read())
+        with open(args.file, encoding="utf-8-sig") as fh:  # TIA exports may carry a BOM
+            source = fh.read()
+        errors = check_source(source)
         for e in errors:
             print(f"{args.file}:{e['line']}:{e['col']}: {e['message']}")
         if not errors:
-            print(f"{args.file}: OK")
+            print(f"{args.file}: OK" + (" (SCL)" if is_scl(source) else ""))
         return 1 if errors else 0
 
     if args.cmd == "serve" or args.cmd is None:

@@ -8,7 +8,7 @@ Schwerpunkt bleibt die **virtuelle SPS**. Die weiteren Themen bauen auf deren Ba
 | Thema | Inhalt |
 |---|---|
 | Sprachumfang | ✔ ARRAY (eindimensional), ✔ eigene FUNCTION/FUNCTION_BLOCK, ✔ mehrere POUs je Quelltext, ✔ STRUCT/UDT (verschachtelt, Arrays von Strukturen), ✔ STRING[n]. Offen: mehrdimensionale Arrays, VAR_IN_OUT, Aufzählungstypen, WSTRING, Tasks mit unterschiedlichen Zykluszeiten |
-| SCL-Kompatibilität | Siemens-SCL-Dialekt (`#lokal`, `"DB".Variable`, `REGION`), Import aus TIA Portal (Quelldateien `.scl`/`.db`) und PLCopen XML |
+| SCL-Kompatibilität | ✔ SCL-Quellen aus dem TIA Portal (OB, DBs, FBs, FCs, UDTs, `#lokal`, `"Global"`, `REGION`). Offen: Anlauf-/Weckalarm-OBs, Startwerte in Instanz-DBs, eigene S7-DB-Nummern, Namen mit Sonderzeichen, PLCopen-XML-Import |
 | Isolation | Ein Container je vPLC (Docker/Kubernetes-Operator), Ressourcenlimits, Neustartrichtlinien |
 | Echtzeitnähe | Zyklusmessung mit Jitter-Statistik, optional C-/WASM-Backend für den Compiler, PREEMPT_RT-Hosts |
 | Retain | Remanente Variablen dauerhaft speichern (`RETAIN`), Wiederanlauf nach Stromausfall |

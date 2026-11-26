@@ -19,7 +19,7 @@ features:
   - id: web.programm-editor
     title: Programm-Editor im Browser
     group: web.bedienung
-    summary: Editor mit Zeilennummern, Prüfen-Knopf, Fehlerliste mit Sprung zur Zeile, Beispiel laden, Download mit Kommentar.
+    summary: Editor mit Zeilennummern, Prüfen-Knopf, Fehlerliste mit Sprung zur Zeile, Beispiel laden, Datei öffnen (.st/.scl), Download mit Kommentar.
     usage:
       - channel: web
         text: Registerkarte „Programm“; Strg+S lädt in die vPLC.

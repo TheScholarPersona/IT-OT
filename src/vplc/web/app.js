@@ -118,7 +118,7 @@ async function refreshStatus() {
   const mode = $("#d-mode");
   mode.textContent = s.mode;
   mode.className = `badge ${s.mode}`;
-  $("#d-program").textContent = s.program ? `${s.program} · Version ${s.program_version ?? "–"} · Zyklus ${s.cycle_ms} ms` : "kein Programm geladen";
+  $("#d-program").textContent = s.program ? `${s.program}${s.dialect === "SCL" ? " (SCL)" : ""} · Version ${s.program_version ?? "–"} · Zyklus ${s.cycle_ms} ms` : "kein Programm geladen";
   $("#btn-run").disabled = s.mode === "RUN" || !s.program;
   $("#btn-stop").disabled = s.mode !== "RUN";
   $("#s-scans").textContent = s.scan_count.toLocaleString("de-DE");
@@ -193,7 +193,7 @@ async function loadProgram() {
 
 async function checkProgram() {
   const r = await api("POST", "/api/check", { source: $("#source").value });
-  renderErrors(r.errors, r.ok ? "✓ Keine Fehler gefunden" : null);
+  renderErrors(r.errors, r.ok ? (r.dialect === "SCL" ? "✓ Keine Fehler gefunden (SCL aus TIA Portal erkannt)" : "✓ Keine Fehler gefunden") : null);
   return r.ok;
 }
 
@@ -437,6 +437,15 @@ async function init() {
     $("#source").value = await api("GET", `/api/examples/${encodeURIComponent(name)}`, undefined, { text: true });
     state.dirty = true;
     renderErrors([]);
+  });
+  $("#file-open").addEventListener("change", async (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    if (!file || (state.dirty && !confirm("Editorinhalt durch die Datei ersetzen?"))) return;
+    $("#source").value = (await file.text()).replace(/^\uFEFF/, "");  // TIA exports may start with a BOM
+    state.dirty = true;
+    renderErrors([]);
+    checkProgram().catch(() => {});
   });
   window.addEventListener("beforeunload", (ev) => { if (state.dirty) ev.preventDefault(); });
 

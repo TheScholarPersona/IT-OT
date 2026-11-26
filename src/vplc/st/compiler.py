@@ -212,6 +212,8 @@ class CompiledFunction:
     result: Variable
     body: list[Stmt] = field(default_factory=list)
     active: bool = False
+    outputs: list[str] = field(default_factory=list)  # upper-case VAR_OUTPUT names
+    void: bool = False  # SCL: FUNCTION … : Void
 
     def invoke(self, args: dict[str, object]):
         for var in self.variables.values():
@@ -240,6 +242,7 @@ class CompiledProgram:
     now_ms: int = 0
     function_blocks: list[str] = field(default_factory=list)  # user FB type names
     functions: list[str] = field(default_factory=list)  # user function names
+    dialect: str = "ST"  # "ST" (IEC 61131-3) or "SCL" (TIA Portal source)
     _deadline: float = field(default=0.0, repr=False)
     _ticks: int = field(default=0, repr=False)
 
@@ -288,6 +291,9 @@ class Unit:
         self.fn_decls: dict[str, ast.FunctionDecl] = {}
         self.fb_classes: dict[str, type[UserFunctionBlock]] = {}
         self.functions: dict[str, CompiledFunction] = {}
+        self.global_scope = program.dialect == "SCL"  # global DBs visible in every block
+        self.globals: dict[str, Variable] = {}
+        self.global_fbs: dict[str, FBInstance] = {}
         self.type_decls: dict[str, ast.TypeDecl] = {}
         self.struct_types: dict[str, StructType] = {}
         self.resolving_types: list[str] = []
@@ -388,7 +394,8 @@ class Unit:
         decl = self.fn_decls[key]
         self.compiling_functions.append(key)
         try:
-            rtype = get_type(decl.return_type)
+            void = decl.return_type == "VOID"
+            rtype = get_type("BOOL") if void else get_type(decl.return_type)
             if rtype is None:
                 if decl.return_type in self.type_decls:
                     self.err("Strukturen als Rückgabewert werden noch nicht unterstützt", decl)
@@ -401,18 +408,42 @@ class Unit:
             pou.variables[key] = result
             pou.declare(decl.decls)
             inputs = [k for k, v in pou.variables.items() if v.section == "VAR_INPUT"]
-            fn = CompiledFunction(decl.name, inputs, pou.variables, result)
+            outputs = [k for k, v in pou.variables.items() if v.section == "VAR_OUTPUT"]
+            fn = CompiledFunction(decl.name, inputs, pou.variables, result, outputs=outputs, void=void)
             fn.body = [pou.stmt(s) for s in decl.body]
             self.functions[key] = fn
             return fn
         finally:
             self.compiling_functions.pop()
 
+    def apply_start_values(self, pou: "PouCompiler") -> None:
+        """SCL: assignments from DATA_BLOCK BEGIN sections become the variables' start values."""
+        touched: set[str] = set()
+        for assign in self.ast.startup:
+            base = assign.target.base.upper()
+            if base in pou.fbs:
+                self.err("Startwerte in Instanz-Datenbausteinen werden noch nicht unterstützt", assign)
+                continue
+            n_errors = len(self.errors)
+            stmt = pou.stmt(assign)
+            if len(self.errors) > n_errors:
+                continue
+            try:
+                stmt()
+            except PLCRuntimeError as e:
+                self.err(f"Startwert: {e.message}", assign)
+                continue
+            touched.add(base)
+        for key in touched:
+            var = pou.variables[key]
+            var.init = var.snapshot()  # also used by a cold restart
+
     # ------------------------------------------------------------ entry point
     def compile(self) -> CompiledProgram:
         self.register()
         pou = PouCompiler(self, "PROGRAM", self.ast.name)
         pou.declare(self.ast.decls)
+        self.apply_start_values(pou)
         body = [pou.stmt(s) for s in self.ast.body]
         # check types and POUs that the program never uses
         for key, decl in self.type_decls.items():
@@ -426,7 +457,8 @@ class Unit:
                 self.instantiate_fb(key, decl)
         prog = CompiledProgram(self.ast.name, pou.variables, pou.fbs, body,
                                function_blocks=[d.name for d in self.ast.function_blocks],
-                               functions=[d.name for d in self.ast.functions])
+                               functions=[d.name for d in self.ast.functions],
+                               dialect=self.ast.dialect)
         self.ref.prog = prog
         if self.errors:
             unique = {(e.line, e.col, e.message): e for e in self.errors}
@@ -450,6 +482,19 @@ class PouCompiler:
     def ref(self) -> _ProgRef:
         return self.unit.ref
 
+    def lookup_var(self, key: str) -> Variable | None:
+        """Local variable, or (SCL) a global data block visible in every block."""
+        var = self.variables.get(key)
+        if var is None and self.unit.global_scope and self.kind != "PROGRAM":
+            var = self.unit.globals.get(key)
+        return var
+
+    def lookup_fb(self, key: str) -> FBInstance | None:
+        inst = self.fbs.get(key)
+        if inst is None and self.unit.global_scope and self.kind != "PROGRAM":
+            inst = self.unit.global_fbs.get(key)
+        return inst
+
     def err(self, message: str, node: ast.Node) -> None:
         self.unit.err(message, node)
 
@@ -459,9 +504,6 @@ class PouCompiler:
             key = d.name.upper()
             if key in self.variables or key in self.fbs:
                 self.err(f"'{d.name}' ist bereits deklariert", d)
-                continue
-            if self.kind == "FUNCTION" and d.section == "VAR_OUTPUT":
-                self.err("VAR_OUTPUT ist in Funktionen nicht erlaubt; Ergebnis über den Funktionsnamen zuweisen", d)
                 continue
             if d.type_name in FUNCTION_BLOCKS or d.type_name in self.unit.fb_decls:
                 self.declare_fb(d, key)
@@ -478,6 +520,8 @@ class PouCompiler:
                 init = dtype.default()
             self.variables[key] = Variable(
                 d.name, dtype, d.section, d.constant, d.retain, init, dtype.copy(init), d.line)
+            if self.kind == "PROGRAM" and self.unit.global_scope and d.section == "VAR":
+                self.unit.globals[key] = self.variables[key]
 
     def declare_fb(self, d: ast.VarDecl, key: str) -> None:
         if self.kind == "FUNCTION":
@@ -495,10 +539,14 @@ class PouCompiler:
             self.err("Funktionsbaustein-Instanzen müssen in VAR deklariert werden", d)
         if d.type_name in FUNCTION_BLOCKS:
             self.fbs[key] = FBInstance(d.name, FUNCTION_BLOCKS[d.type_name](), d.line)
+            if self.kind == "PROGRAM" and self.unit.global_scope:
+                self.unit.global_fbs[key] = self.fbs[key]
             return
         block = self.unit.instantiate_fb(d.type_name, d)
         if block is not None:
             self.fbs[key] = FBInstance(d.name, block, d.line)
+            if self.kind == "PROGRAM" and self.unit.global_scope:
+                self.unit.global_fbs[key] = self.fbs[key]
 
     def resolve_dtype(self, d: ast.VarDecl) -> DataType | None:
         """Data type of a declaration: elementary, STRING[n], STRUCT type, ARRAY of those."""
@@ -613,9 +661,9 @@ class PouCompiler:
             return lambda: value
         if isinstance(node, ast.Name):
             key = node.name.upper()
-            var = self.variables.get(key)
+            var = self.lookup_var(key)
             if var is None:
-                if key in self.fbs:
+                if self.lookup_fb(key) is not None:
                     self.err(f"'{node.name}' ist ein Funktionsbaustein; Ausgang mit '.' angeben", node)
                 elif key in self.unit.fn_decls:
                     self.err(f"Funktion '{node.name}' muss mit ( ) aufgerufen werden", node)
@@ -672,7 +720,7 @@ class PouCompiler:
         variable (fields and indices in any depth).
         """
         base_key = node.base.upper()
-        inst = self.fbs.get(base_key)
+        inst = self.lookup_fb(base_key)
         if inst is not None:
             kind, member, display = node.steps[0]
             cls = type(inst.block)
@@ -688,7 +736,7 @@ class PouCompiler:
                 return None, None
             # Resolve the block at run time: a warm restart may swap it.
             return (lambda: inst.block.values[member]), Elementary(iec)
-        var = self.variables.get(base_key)
+        var = self.lookup_var(base_key)
         if var is None:
             self.err(f"Unbekannte Variable '{node.base}'", node)
             return None, None
@@ -819,7 +867,7 @@ class PouCompiler:
         return lambda: 0
 
     def call(self, node: ast.Call, const: bool) -> Expr:
-        if node.func in FUNCTION_BLOCKS or node.func in self.unit.fb_decls or node.func in self.fbs:
+        if node.func in FUNCTION_BLOCKS or node.func in self.unit.fb_decls or self.lookup_fb(node.func):
             self.err("Funktionsbausteine werden als Anweisung aufgerufen, nicht in Ausdrücken", node)
             return lambda: 0
         if node.func in self.unit.fn_decls:
@@ -855,6 +903,9 @@ class PouCompiler:
             return lambda: 0
         fn = self.unit.function(node.func, node)
         if fn is None:
+            return lambda: 0
+        if fn.void:
+            self.err(f"Funktion {fn.name} liefert keinen Wert (VOID) – als Anweisung aufrufen", node)
             return lambda: 0
         if len(node.args) > len(fn.inputs):
             self.err(f"{fn.name} hat {len(fn.inputs)} Eingänge, erhalten {len(node.args)} Argumente", node)
@@ -895,9 +946,9 @@ class PouCompiler:
 
     def target(self, name: ast.Name) -> Variable | None:
         """Elementary variable that a statement writes (assignment, FOR, FB output)."""
-        var = self.variables.get(name.name.upper())
+        var = self.lookup_var(name.name.upper())
         if var is None:
-            if name.name.upper() in self.fbs:
+            if self.lookup_fb(name.name.upper()) is not None:
                 self.err(f"Funktionsbaustein-Instanz '{name.name}' kann nicht zugewiesen werden", name)
             else:
                 self.err(f"Unbekannte Variable '{name.name}'", name)
@@ -922,10 +973,10 @@ class PouCompiler:
     def _composite_source(self, node: ast.Node, dtype: DataType, target: str):
         """Getter for the right-hand side of a whole-array/struct assignment, or None."""
         if isinstance(node, ast.Name):
-            other = self.variables.get(node.name.upper())
+            other = self.lookup_var(node.name.upper())
             if other is not None and same_layout(other.dtype, dtype):
                 return lambda: other.value
-        elif isinstance(node, ast.Path) and node.base.upper() not in self.fbs:
+        elif isinstance(node, ast.Path) and self.lookup_fb(node.base.upper()) is None:
             n_errors = len(self.unit.errors)
             getter, src_dtype = self.path(node)
             if getter is not None and same_layout(src_dtype, dtype):
@@ -938,7 +989,7 @@ class PouCompiler:
     def assign_stmt(self, node: ast.Assign) -> Stmt:
         line, col = node.line, node.col
         if isinstance(node.target, ast.Path):
-            if node.target.base.upper() in self.fbs:
+            if self.lookup_fb(node.target.base.upper()) is not None:
                 self.err("Ein- und Ausgänge von Funktionsbausteinen werden beim Aufruf versorgt, nicht zugewiesen",
                          node.target)
                 return lambda: None
@@ -1119,13 +1170,80 @@ class PouCompiler:
                     break
         return for_
 
+    def output_setter(self, target: ast.Node):
+        """Setter for an output target (=> name or => path); None after reporting an error."""
+        if isinstance(target, ast.Path):
+            if self.lookup_fb(target.base.upper()) is not None:
+                self.err("Ausgänge können nicht direkt in Funktionsbausteine geschrieben werden", target)
+                return None
+            getter, dtype = self.path(target)
+            if getter is None:
+                return None
+            if not is_elementary(dtype) or getter.var.constant:
+                self.err(f"'{self._path_text(target)}' kann keinen Ausgang aufnehmen", target)
+                return None
+            container, steps, t = getter.container, getter.steps, dtype.iec
+            kind, arg, info = steps[-1]
+            n, line, col = len(steps), target.line, target.col
+
+            def set_path(value):
+                parent = container(n - 1)
+                if kind == "f":
+                    key = arg
+                else:
+                    arr, name = info
+                    try:
+                        key = arr.position(int(arg()), name)
+                    except IndexError as e:
+                        raise PLCRuntimeError(str(e), line, col) from None
+                parent[key] = coerce(t, value)
+            return set_path
+        var = self.target(target)
+        if var is not None and not var.is_elementary:
+            self.err(f"'{var.name}' ist kein elementarer Wert und kann keinen Ausgang aufnehmen", target)
+            return None
+        return None if var is None else self.assigner(var, target.line, target.col)
+
+    def function_statement(self, node: ast.FBCall) -> Stmt:
+        """SCL: "FC_X"(a := 1, b => #y); – function call as a statement, result discarded."""
+        fn = self.unit.function(node.instance.upper(), node)
+        if fn is None:
+            return lambda: None
+        bound = []
+        for pname, expr in node.inputs.items():
+            if pname not in fn.inputs:
+                self.err(f"{fn.name} hat keinen Eingang '{pname}'", node)
+                continue
+            bound.append((pname, self.expr(expr)))
+        outputs = []
+        for pname, target in node.outputs.items():
+            if pname not in fn.outputs:
+                self.err(f"{fn.name} hat keinen Ausgang '{pname}'", node)
+                continue
+            setter = self.output_setter(target)
+            if setter is not None:
+                outputs.append((pname, setter))
+        line, col = node.line, node.col
+
+        def call():
+            values = {k: e() for k, e in bound}
+            try:
+                fn.invoke(values)
+            except (ValueError, TypeError, OverflowError):
+                raise PLCRuntimeError(f"Ungültiges Argument für {fn.name}", line, col) from None
+            for pname, setter in outputs:
+                setter(fn.variables[pname].value)
+        return call
+
     def fb_call(self, node: ast.FBCall) -> Stmt:
-        inst = self.fbs.get(node.instance.upper())
+        key = node.instance.upper()
+        inst = self.lookup_fb(key)
         if inst is None:
-            key = node.instance.upper()
-            if key in FUNCTIONS or key in self.unit.fn_decls:
+            if key in self.unit.fn_decls:
+                return self.function_statement(node)
+            if key in FUNCTIONS:
                 self.err(f"Rückgabewert der Funktion '{node.instance}' wird nicht verwendet", node)
-            elif key in self.variables:
+            elif self.lookup_var(key) is not None:
                 self.err(f"'{node.instance}' ist kein Funktionsbaustein", node)
             else:
                 self.err(f"Unbekannte Funktionsbaustein-Instanz '{node.instance}'", node)
@@ -1143,12 +1261,9 @@ class PouCompiler:
             if pname not in cls.OUTPUTS:
                 self.err(f"{display} hat keinen Ausgang '{pname}'", node)
                 continue
-            var = self.target(target)
-            if var is not None and not var.is_elementary:
-                self.err(f"'{var.name}' ist kein elementarer Wert und kann keinen Ausgang aufnehmen", target)
-                var = None
-            if var is not None:
-                outputs.append((pname, self.assigner(var, target.line, target.col)))
+            setter = self.output_setter(target)
+            if setter is not None:
+                outputs.append((pname, setter))
         ref, line, col = self.ref, node.line, node.col
 
         def call():
@@ -1159,10 +1274,12 @@ class PouCompiler:
             except (ValueError, TypeError, OverflowError):
                 raise PLCRuntimeError(f"Ungültiger Eingangswert für {inst.name}", line, col) from None
             block.execute(ref.prog.now_ms)
-            for pname, assign in outputs:
-                assign(block.values[pname])
+            for pname, setter in outputs:
+                try:
+                    setter(block.values[pname])
+                except (ValueError, TypeError, OverflowError):
+                    raise PLCRuntimeError(f"Ausgang {pname} von {inst.name} passt nicht ins Ziel", line, col) from None
         return call
-
 
 def _not(v):
     if isinstance(v, bool):

@@ -317,7 +317,7 @@ features:
         text: "`FUNCTION Skaliere : REAL … END_FUNCTION`; Aufruf `Skaliere(r)` oder `Skaliere(Roh := r, Max := 50.0)`."
     rules:
       - Rekursion (auch über andere Funktionen) wird abgelehnt.
-      - Funktionen haben keine VAR_OUTPUT und keine Bausteininstanzen; lokale Variablen beginnen bei jedem Aufruf neu.
+      - Funktionen enthalten keine Bausteininstanzen; lokale Variablen und Ausgänge beginnen bei jedem Aufruf neu.
     technical:
       components: [src/vplc/st/compiler.py, src/vplc/st/parser.py]
     acceptance:
@@ -335,7 +335,7 @@ features:
         text: Ein Aufrufkreis A → B → A wird mit der Kette gemeldet.
       - id: deklaration
         kind: regel
-        text: Reservierte Namen, doppelte Namen, VAR_OUTPUT und Bausteininstanzen in Funktionen sowie ein fehlendes oder doppeltes PROGRAM werden gemeldet.
+        text: Reservierte Namen, doppelte Namen und Bausteininstanzen in Funktionen sowie ein fehlendes oder doppeltes PROGRAM werden gemeldet.
     evidence:
       - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_user_functions_with_positional_named_and_default_arguments, covers: [aufruf, kein-gedaechtnis] }
       - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_function_call_errors, covers: [aufruffehler] }
@@ -404,4 +404,52 @@ features:
       - { kind: unit, file: tests/test_structs_strings.py, test: test_structs_with_defaults_nesting_and_arrays_of_structs, covers: [verschachtelt] }
       - { kind: unit, file: tests/test_structs_strings.py, test: test_struct_errors, covers: [fehler] }
       - { kind: unit, file: tests/test_structs_strings.py, test: test_warm_restart_keeps_structs_with_unchanged_layout, covers: [warmstart] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.scl-import
+    title: SCL-Quellen aus dem TIA Portal laden
+    group: programmierung.tia
+    summary: Lädt SCL-Quellen, wie das TIA Portal sie mit „Aus Bausteinen generieren“ erzeugt – OB, globale und Instanz-DBs, FBs, FCs und UDTs.
+    description: |
+      Die vPLC erkennt SCL automatisch. Der zyklische OB wird zum Programm, globale Datenbausteine sind aus allen
+      Bausteinen erreichbar (`"Anlage_DB".Pumpe.Drehzahl`), Instanz-DBs werden zu FB-Instanzen. Startwerte aus dem
+      BEGIN-Teil eines DB gelten beim Laden und beim Kaltstart. Lokale Namen mit `#`, `REGION`, Bausteinattribute
+      `{ … }`, `TITLE`, `VERSION` und Siemens-Literale wie `W#16#FF` werden verstanden; `TON_TIME`, `IEC_TIMER` und
+      `CTU_INT` werden auf die IEC-Bausteine abgebildet. FCs mit `Void` und `VAR_OUTPUT` werden als Anweisung aufgerufen.
+    usage:
+      - channel: api
+        text: "SCL-Text wie Structured Text laden (`PUT …/program`); `POST /api/check` meldet `dialect: SCL`."
+      - channel: cli
+        text: "`vplc check pumpenstation.scl` → `OK (SCL)`."
+    rules:
+      - Genau ein ORGANIZATION_BLOCK (der zyklische OB); weitere OBs, GOTO und Namen mit Leer- oder Sonderzeichen werden abgelehnt.
+      - Startwerte in Instanz-DBs werden noch nicht unterstützt.
+      - Alle Datenbausteine liegen im S7-Abbild gemeinsam in DB1.
+    technical:
+      components: [src/vplc/st/lexer.py, src/vplc/st/parser.py, src/vplc/st/compiler.py, src/vplc/__main__.py]
+      endpoints: ["POST /api/check", "GET /api/examples/{name}"]
+      notes: [Beispiel `examples/pumpenstation.scl`.]
+    acceptance:
+      - id: tia-quelle-laeuft
+        kind: effekt
+        text: Die Beispielquelle (auch mit BOM) läuft wie auf der SPS – DB-Startwerte, Anlaufverzögerung, FC-Skalierung und Void-FC mit Ausgängen.
+      - id: syntax
+        kind: effekt
+        text: TITLE mit Sonderzeichen, Attribute, AUTHOR/FAMILY/VERSION, REGION mit Umlauten, W#16#/DW#16#/L#, IEC_TIMER und CTU_INT werden verarbeitet.
+      - id: globale-dbs
+        kind: effekt
+        text: Globale DBs sind in FCs lesbar und schreibbar; lokale Namen haben Vorrang.
+      - id: fehler
+        kind: regel
+        text: Fehlender oder zweiter OB, GOTO, Namen mit Leerzeichen, Startwerte in Instanz-DBs, Void-FC in Ausdrücken und unbekannte DBs werden gemeldet; SCL-Syntax in reinem Structured Text wird abgelehnt.
+      - id: api-kaltstart
+        kind: effekt
+        text: Über die API geladen meldet die vPLC den Dialekt SCL; nach einem Kaltstart gelten wieder die DB-Startwerte.
+    evidence:
+      - { kind: unit, file: tests/test_scl_import.py, test: test_tia_source_compiles_and_runs_like_on_the_plc, covers: [tia-quelle-laeuft] }
+      - { kind: unit, file: tests/test_scl_import.py, test: test_scl_syntax_elements, covers: [syntax] }
+      - { kind: unit, file: tests/test_scl_import.py, test: test_global_data_blocks_are_visible_in_blocks_but_locals_win, covers: [globale-dbs] }
+      - { kind: unit, file: tests/test_scl_import.py, test: test_scl_errors, covers: [fehler] }
+      - { kind: unit, file: tests/test_scl_import.py, test: test_scl_only_syntax_is_rejected_in_plain_structured_text, covers: [fehler] }
+      - { kind: integration, file: tests/test_scl_import.py, test: test_scl_through_api_with_start_values_and_cold_restart, covers: [api-kaltstart] }
     comparisons: { themenliste: vplc }

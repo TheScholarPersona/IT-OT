@@ -138,3 +138,4 @@ dialog label.check { flex-direction: row; }
   .editor { height: 360px; }
   main { padding: 12px; }
 }
+.file-btn { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }

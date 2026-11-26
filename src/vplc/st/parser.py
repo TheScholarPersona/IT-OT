@@ -2,20 +2,31 @@
 
 from __future__ import annotations
 
+import re
+
 from . import ast
 from .errors import STSyntaxError
 from .lexer import Token, tokenize
 
+# Siemens timer/counter instance types -> IEC standard function blocks
+SCL_TYPE_ALIASES = {
+    "IEC_TIMER": "TON", "TON_TIME": "TON", "TOF_TIME": "TOF", "TP_TIME": "TP",
+    "IEC_COUNTER": "CTU", "CTU_INT": "CTU", "CTD_INT": "CTD", "CTUD_INT": "CTUD",
+}
+_SCL_HEADER_VALUE = {"VERSION", "AUTHOR", "FAMILY", "NAME"}
+_SCL_HEADER_FLAG = {"NON_RETAIN", "KNOW_HOW_PROTECT", "UNLINKED", "READ_ONLY"}
+
 _VAR_SECTIONS = {"VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_TEMP", "VAR_IN_OUT"}
 _STMT_END = {
-    "END_PROGRAM", "END_FUNCTION", "END_FUNCTION_BLOCK", "END_IF", "ELSIF", "ELSE", "END_CASE", "END_FOR",
+    "END_PROGRAM", "END_FUNCTION", "END_FUNCTION_BLOCK", "END_ORGANIZATION_BLOCK", "END_DATA_BLOCK", "END_IF", "ELSIF", "ELSE", "END_CASE", "END_FOR",
     "END_WHILE", "UNTIL", "END_REPEAT",
 }
 
 
 class Parser:
-    def __init__(self, source: str):
-        self.tokens = tokenize(source)
+    def __init__(self, source: str, scl: bool = False):
+        self.scl = scl
+        self.tokens = tokenize(source, scl=scl)
         self.pos = 0
 
     # ------------------------------------------------------------ helpers
@@ -245,6 +256,8 @@ class Parser:
         if self.tok.kind != "IDENT":
             raise self.error(f"Datentyp erwartet, gefunden {self.describe(self.tok)}")
         name = self.advance().value.upper()
+        if self.scl:
+            name = SCL_TYPE_ALIASES.get(name, name)
         if name == "STRING" and self.is_op("["):
             self.advance()
             if self.tok.kind != "INT":
@@ -268,6 +281,17 @@ class Parser:
             if self.is_op(";"):
                 self.advance()
                 continue
+            if self.is_kw("REGION"):  # SCL: REGION <free text up to end of line>
+                region_line = self.advance().line
+                while self.tok.kind != "EOF" and self.tok.line == region_line:
+                    self.advance()
+                continue
+            if self.is_kw("END_REGION"):
+                self.advance()
+                self.optional_semicolon()
+                continue
+            if self.is_kw("GOTO"):
+                raise self.error("GOTO und Sprungmarken werden nicht unterstützt")
             stmts.append(self.parse_statement())
 
     def _at_case_label(self) -> bool:
@@ -330,7 +354,10 @@ class Parser:
             elif self.is_op("=>"):
                 self.advance()
                 target = self.expect_ident()
-                outputs[key] = ast.Name(target.value, line=target.line, col=target.col)
+                if self.is_op("[", "."):
+                    outputs[key] = self.parse_path_steps(target)
+                else:
+                    outputs[key] = ast.Name(target.value, line=target.line, col=target.col)
             else:
                 raise self.error("':=' oder '=>' erwartet (Parameter müssen benannt sein)")
             if not self.is_op(")"):
@@ -554,5 +581,152 @@ class Parser:
         raise self.error(f"Ausdruck erwartet, gefunden {self.describe(t)}")
 
 
+    # ============================================================ Siemens SCL (TIA Portal)
+    def _skip_scl_headers(self) -> None:
+        """Skip block headers: TITLE = …, VERSION : 0.1, AUTHOR : x, NON_RETAIN … ({ … } is dropped by the lexer)."""
+        while True:
+            t, nxt = self.tok, self.peek()
+            if t.kind != "IDENT":
+                return
+            word = t.value.upper()
+            if word == "TITLE" and nxt.kind == "OP" and nxt.value == "=":
+                title_line = t.line
+                while self.tok.kind != "EOF" and self.tok.line == title_line:
+                    self.advance()
+            elif word in _SCL_HEADER_VALUE and nxt.kind == "OP" and nxt.value == ":":
+                self.advance()
+                self.advance()
+                self.advance()
+            elif word in _SCL_HEADER_FLAG:
+                self.advance()
+            else:
+                return
+
+    def _scl_body(self, end_kw: str) -> list[ast.Node]:
+        if self.is_kw("BEGIN"):
+            self.advance()
+        body = self.parse_statements()
+        self.expect_kw(end_kw)
+        self.optional_semicolon()
+        return body
+
+    def parse_scl(self) -> ast.Program:
+        """A TIA Portal SCL source: OB, DBs, FBs, FCs and UDTs in any order."""
+        ob: ast.Program | None = None
+        fbs: list[ast.FunctionBlockDecl] = []
+        functions: list[ast.FunctionDecl] = []
+        types: list[ast.TypeDecl] = []
+        dbs: list[tuple[Token, str | None, list[ast.VarDecl], list[ast.Node]]] = []
+        while self.tok.kind != "EOF":
+            if self.is_kw("ORGANIZATION_BLOCK"):
+                if ob is not None:
+                    raise self.error("Nur ein ORGANIZATION_BLOCK (der zyklische OB) wird unterstützt")
+                start = self.advance()
+                name = self.expect_ident().value
+                self._skip_scl_headers()
+                decls = self._decls()
+                body = self._scl_body("END_ORGANIZATION_BLOCK")
+                ob = ast.Program(name, decls, body, line=start.line, col=start.col)
+            elif self.is_kw("DATA_BLOCK"):
+                dbs.append(self.parse_scl_db())
+            elif self.is_kw("FUNCTION_BLOCK"):
+                start = self.advance()
+                name = self.expect_ident().value
+                self._skip_scl_headers()
+                decls = self._decls()
+                body = self._scl_body("END_FUNCTION_BLOCK")
+                fbs.append(ast.FunctionBlockDecl(name, decls, body, line=start.line, col=start.col))
+            elif self.is_kw("FUNCTION"):
+                start = self.advance()
+                name = self.expect_ident().value
+                self.expect_op(":")
+                return_type = self.parse_type_name()
+                self._skip_scl_headers()
+                decls = self._decls()
+                body = self._scl_body("END_FUNCTION")
+                functions.append(ast.FunctionDecl(name, return_type, decls, body, line=start.line, col=start.col))
+            elif self.is_kw("TYPE"):
+                types.extend(self.parse_scl_type())
+            else:
+                raise self.error("ORGANIZATION_BLOCK, DATA_BLOCK, FUNCTION_BLOCK, FUNCTION oder TYPE erwartet, "
+                                 f"gefunden {self.describe(self.tok)}")
+        if ob is None:
+            raise self.error("ORGANIZATION_BLOCK fehlt – ohne zyklischen OB (z. B. \"Main\") läuft kein Programm")
+        decls: list[ast.VarDecl] = []
+        startup: list[ast.Node] = []
+        for tok, type_name, fields, inits in dbs:
+            if type_name is None:  # global DB with its own variables -> anonymous struct type
+                types.append(ast.TypeDecl(tok.value, fields, line=tok.line, col=tok.col))
+                type_name = tok.value.upper()
+            decls.append(ast.VarDecl(tok.value, type_name, "VAR", line=tok.line, col=tok.col))
+            startup.extend(self._prefix_db(a, tok.value) for a in inits)
+        ob.decls = decls + ob.decls
+        ob.function_blocks, ob.functions, ob.types = fbs, functions, types
+        ob.startup, ob.dialect = startup, "SCL"
+        return ob
+
+    def parse_scl_type(self) -> list[ast.TypeDecl]:
+        start = self.expect_kw("TYPE")
+        if self.tok.kind == "IDENT" and self.peek().kind == "OP" and self.peek().value == ":":
+            self.pos -= 1  # IEC form "TYPE Name : STRUCT …" inside an SCL source
+            return self.parse_type_block()
+        name = self.expect_ident()
+        self._skip_scl_headers()
+        self.expect_kw("STRUCT")
+        fields = self.parse_var_lines("END_STRUCT", "STRUCT")
+        self.expect_kw("END_STRUCT")
+        self.optional_semicolon()
+        self.expect_kw("END_TYPE")
+        self.optional_semicolon()
+        return [ast.TypeDecl(name.value, fields, line=start.line, col=start.col)]
+
+    def parse_scl_db(self):
+        """DATA_BLOCK "Name" [headers] (VAR … END_VAR | STRUCT … END_STRUCT | "UDT" | "FB") BEGIN … END_DATA_BLOCK"""
+        self.expect_kw("DATA_BLOCK")
+        name = self.expect_ident()
+        self._skip_scl_headers()
+        type_name, fields = None, []
+        if self.is_kw("VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_TEMP"):
+            fields = self._decls()
+        elif self.is_kw("STRUCT"):
+            self.advance()
+            fields = self.parse_var_lines("END_STRUCT", "STRUCT")
+            self.expect_kw("END_STRUCT")
+            self.optional_semicolon()
+        else:
+            type_name = self.parse_type_name()
+        self.expect_kw("BEGIN")
+        inits = self.parse_statements()
+        self.expect_kw("END_DATA_BLOCK")
+        self.optional_semicolon()
+        for st in inits:
+            if not isinstance(st, ast.Assign):
+                raise STSyntaxError("Im BEGIN-Teil eines DATA_BLOCK sind nur Startwerte (a := 1;) erlaubt",
+                                    st.line, st.col)
+        return name, type_name, fields, inits
+
+    @staticmethod
+    def _prefix_db(assign: ast.Assign, db: str) -> ast.Assign:
+        """'Soll := 200;' in DATA_BLOCK "Motor_DB" -> '"Motor_DB".Soll := 200;'"""
+        t = assign.target
+        if isinstance(t, ast.Name):
+            steps = [("field", t.name.upper(), t.name)]
+        else:
+            steps = [("field", t.base.upper(), t.base)] + list(t.steps)
+        target = ast.Path(db, steps, line=t.line, col=t.col)
+        return ast.Assign(target, assign.value, line=assign.line, col=assign.col)
+
+
+_SCL_HINT = re.compile(r"\b(ORGANIZATION_BLOCK|DATA_BLOCK)\b|^\s*BEGIN\b", re.IGNORECASE | re.MULTILINE)
+
+
+def is_scl(source: str) -> bool:
+    """TIA Portal SCL source (generated from blocks) rather than plain Structured Text."""
+    return bool(_SCL_HINT.search(source))
+
+
 def parse(source: str) -> ast.Program:
+    source = source.lstrip("\ufeff")  # byte order mark of exported files
+    if is_scl(source):
+        return Parser(source, scl=True).parse_scl()
     return Parser(source).parse_source()

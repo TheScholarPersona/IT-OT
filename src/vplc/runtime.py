@@ -161,8 +161,10 @@ class VirtualPLC:
             if self.opcua and self.opcua.running:
                 await self.opcua.configure(program, self._program_label())
         label = self._program_label()
-        self.diag("info", f"Programm {label} geladen" + (" (Warmstart, Werte übernommen)" if kept else ""))
-        return {"program": program.name, "version": version, "kept_values": kept, "running": was_running}
+        dialect = " (SCL aus TIA Portal)" if program.dialect == "SCL" else ""
+        self.diag("info", f"Programm {label} geladen{dialect}" + (" – Warmstart, Werte übernommen" if kept else ""))
+        return {"program": program.name, "version": version, "kept_values": kept, "running": was_running,
+                "dialect": program.dialect}
 
     def run(self) -> None:
         if self.program is None:
@@ -386,6 +388,7 @@ class VirtualPLC:
             "name": self.config.name,
             "mode": self.mode,
             "program": self.program.name if self.program else None,
+            "dialect": self.program.dialect if self.program else None,
             "program_version": self.program_version,
             "cycle_ms": self.config.cycle_ms,
             "watchdog_ms": self.config.watchdog_ms,

@@ -25,7 +25,7 @@
 
 | Modul | Aufgabe |
 |---|---|
-| `vplc/st/lexer.py`, `parser.py`, `ast.py` | Structured Text → abstrakter Syntaxbaum. Fehler mit Zeile und Spalte. |
+| `vplc/st/lexer.py`, `parser.py`, `ast.py` | Structured Text → abstrakter Syntaxbaum. Fehler mit Zeile und Spalte. SCL-Quellen aus dem TIA Portal werden automatisch erkannt; OB, DBs, FBs, FCs und UDTs werden zu einem Programm zusammengesetzt (globale DBs in allen Bausteinen sichtbar, DB-Startwerte als Startzuweisungen). |
 | `vplc/st/compiler.py` | Semantische Prüfung (sammelt *alle* Fehler) und Übersetzung des AST in Python-Closures. Kein `eval`, kein generierter Python-Quelltext. Je Instanz eines eigenen Funktionsbausteins wird dessen Rumpf an die Instanzvariablen gebunden übersetzt; Funktionen einmal, Rekursion wird abgelehnt. |
 | `vplc/st/stdlib.py` | IEC-Funktionsbausteine (Timer, Zähler, Flanken, Bistabile) und Funktionen. |
 | `vplc/types.py` | Elementare Datentypen: Wertebereich/Überlauf, REAL als float32, STRING[n], S7-Kodierung (Big Endian). |

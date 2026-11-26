@@ -39,6 +39,9 @@ areas:
       - id: programmierung.bausteine
         title: Eigene Bausteine
         summary: Funktionen und Funktionsbausteine im eigenen Quelltext.
+      - id: programmierung.tia
+        title: Import aus dem TIA Portal
+        summary: SCL-Quellen, wie das TIA Portal sie aus Bausteinen erzeugt.
       - id: programmierung.pruefung
         title: Prüfung und Beispiele
 

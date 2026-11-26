@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..st import STCompileError, STError, check_source
+from ..st.parser import is_scl
 from ..st.stdlib import FUNCTION_BLOCKS
 from .service import Conflict, NotFound, PLCManager
 from .store import Store
@@ -135,7 +136,8 @@ def create_app(data_dir: str | None = None, api_token: str | None = None,
 
     @app.get("/api/info")
     async def info(_: str = Depends(user)):
-        examples = sorted(p.stem for p in EXAMPLES_DIR.glob("*.st")) if EXAMPLES_DIR.exists() else []
+        examples = sorted({p.stem for ext in ("*.st", "*.scl") for p in EXAMPLES_DIR.glob(ext)}) \
+            if EXAMPLES_DIR.exists() else []
         return {
             "version": __version__,
             "function_blocks": sorted(FUNCTION_BLOCKS),
@@ -145,15 +147,16 @@ def create_app(data_dir: str | None = None, api_token: str | None = None,
 
     @app.get("/api/examples/{name}", response_class=PlainTextResponse)
     async def example(name: str, _: str = Depends(user)):
-        path = (EXAMPLES_DIR / f"{name}.st").resolve()
-        if path.parent != EXAMPLES_DIR.resolve() or not path.exists():
-            raise HTTPException(404, "Beispiel nicht gefunden")
-        return path.read_text(encoding="utf-8")
+        for ext in (".st", ".scl"):
+            path = (EXAMPLES_DIR / f"{name}{ext}").resolve()
+            if path.parent == EXAMPLES_DIR.resolve() and path.exists():
+                return path.read_text(encoding="utf-8")
+        raise HTTPException(404, "Beispiel nicht gefunden")
 
     @app.post("/api/check")
     async def check(body: SourceCheck, _: str = Depends(user)):
         errors = check_source(body.source)
-        return {"ok": not errors, "errors": errors}
+        return {"ok": not errors, "errors": errors, "dialect": "SCL" if is_scl(body.source) else "ST"}
 
     @app.get("/api/audit")
     async def audit(limit: int = 200, plc_id: str | None = None,

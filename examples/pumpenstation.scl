@@ -1,0 +1,130 @@
+// Beispiel einer SCL-Quelle, wie sie das TIA Portal mit
+// "Aus Bausteinen generieren" erzeugt (gekürzt).
+TYPE "UDT_Pumpe"
+VERSION : 0.1
+   STRUCT
+      Ein : Bool;
+      Laeuft : Bool;
+      Drehzahl : Real;
+      Betriebsstunden : DInt;
+      Bezeichnung : String[20] := 'Pumpe';
+   END_STRUCT;
+
+END_TYPE
+
+FUNCTION "FC_Skalieren" : Real
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      Roh : Int;
+      Max : Real;
+   END_VAR
+
+BEGIN
+	#FC_Skalieren := INT_TO_REAL(#Roh) / 27648.0 * #Max;
+END_FUNCTION
+
+FUNCTION "FC_Begrenzen" : Void
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      Wert : Real;
+      Grenze : Real;
+   END_VAR
+   VAR_OUTPUT 
+      Ergebnis : Real;
+      Begrenzt : Bool;
+   END_VAR
+
+BEGIN
+	#Begrenzt := #Wert > #Grenze;
+	IF #Begrenzt THEN
+	    #Ergebnis := #Grenze;
+	ELSE
+	    #Ergebnis := #Wert;
+	END_IF;
+END_FUNCTION
+
+FUNCTION_BLOCK "FB_Pumpe"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+   VAR_INPUT 
+      Start : Bool;
+      Stopp : Bool;
+      Sollwert_Roh : Int;
+   END_VAR
+   VAR_OUTPUT 
+      Laeuft : Bool;
+      Drehzahl : Real;
+   END_VAR
+   VAR 
+      Anlauf : TON_TIME;
+      Selbsthaltung : Bool;
+   END_VAR
+   VAR_TEMP 
+      Soll : Real;
+   END_VAR
+
+BEGIN
+	REGION Selbsthaltung mit Anlaufverzögerung
+	    #Selbsthaltung := (#Start OR #Selbsthaltung) AND NOT #Stopp;
+	    #Anlauf(IN := #Selbsthaltung, PT := T#2S);
+	    #Laeuft := #Anlauf.Q;
+	END_REGION
+	
+	REGION Drehzahl
+	    #Soll := "FC_Skalieren"(Roh := #Sollwert_Roh, Max := 3000.0);
+	    "FC_Begrenzen"(Wert := #Soll,
+	                   Grenze := "Anlage_DB".MaxDrehzahl,
+	                   Ergebnis => #Soll);
+	    IF #Laeuft THEN
+	        #Drehzahl := #Soll;
+	    ELSE
+	        #Drehzahl := 0.0;
+	    END_IF;
+	END_REGION
+END_FUNCTION_BLOCK
+
+DATA_BLOCK "Anlage_DB"
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+NON_RETAIN
+   VAR 
+      Start : Bool;
+      Stopp : Bool;
+      Sollwert : Int := 13824;
+      MaxDrehzahl : Real := 2500.0;
+      Pumpe : "UDT_Pumpe";
+   END_VAR
+
+BEGIN
+   MaxDrehzahl := 2400.0;
+   Pumpe.Bezeichnung := 'P-101';
+END_DATA_BLOCK
+
+DATA_BLOCK "Pumpe1_DB"
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+NON_RETAIN
+"FB_Pumpe"
+
+BEGIN
+
+END_DATA_BLOCK
+
+ORGANIZATION_BLOCK "Main"
+TITLE = "Main Program Sweep (Cycle)"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+
+BEGIN
+	"Pumpe1_DB"(Start := "Anlage_DB".Start,
+	            Stopp := "Anlage_DB".Stopp,
+	            Sollwert_Roh := "Anlage_DB".Sollwert,
+	            Laeuft => "Anlage_DB".Pumpe.Laeuft,
+	            Drehzahl => "Anlage_DB".Pumpe.Drehzahl);
+	
+	IF "Anlage_DB".Pumpe.Laeuft THEN
+	    "Anlage_DB".Pumpe.Betriebsstunden := "Anlage_DB".Pumpe.Betriebsstunden + 1;
+	END_IF;
+END_ORGANIZATION_BLOCK

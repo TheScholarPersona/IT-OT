@@ -83,7 +83,8 @@ def test_check_endpoint_and_examples(make_client):
         assert {"ampel", "tank", "foerderband"} <= set(info["examples"])
         for name in info["examples"]:
             src = c.get(f"/api/examples/{name}").text
-            assert c.post("/api/check", json={"source": src}).json() == {"ok": True, "errors": []}
+            r = c.post("/api/check", json={"source": src}).json()
+            assert r["ok"] and r["errors"] == [], (name, r)
         assert c.get("/api/examples/..%2Fpyproject").status_code == 404
 
 

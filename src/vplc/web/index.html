@@ -74,6 +74,8 @@
       <div class="tab card" id="tab-program">
         <div class="toolbar">
           <select id="example-select"><option value="">Beispiel laden …</option></select>
+          <label class="file-btn" title="Structured Text (.st) oder SCL-Quelle aus dem TIA Portal (.scl)">Datei öffnen …
+            <input id="file-open" type="file" accept=".st,.scl,.txt,text/plain" hidden></label>
           <input id="commit-msg" type="text" placeholder="Änderungskommentar (z. B. „Gelbphase verlängert“)" maxlength="500">
           <label class="check"><input id="warm" type="checkbox" checked> Werte übernehmen</label>
           <button id="btn-check">Prüfen</button>

@@ -189,7 +189,6 @@ FUNCTION F : INT VAR_OUTPUT o : INT; END_VAR VAR t : TON; END_VAR F := 1; END_FU
 FUNCTION F : INT F := 2; END_FUNCTION
 PROGRAM P VAR x : F; END_VAR END_PROGRAM""")
     assert "'TON' ist ein reservierter Name" in text
-    assert "VAR_OUTPUT ist in Funktionen nicht erlaubt" in text
     assert "keine Funktionsbaustein-Instanzen erlaubt" in text
     assert "'F' ist bereits deklariert" in text
     assert "Funktionen werden aufgerufen, nicht deklariert" in text

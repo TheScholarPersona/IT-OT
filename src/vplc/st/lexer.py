@@ -41,6 +41,9 @@ _TOKEN_RE = re.compile(
   | (?P<string>'(?:\$.|[^'$\n])*')
   | (?P<dstring>"[^"\n]*")
   | (?P<comment>\(\*.*?\*\)|//[^\n]*)
+  | (?P<attr>\{[^}]*\})
+  | (?P<local>\#[A-Za-z_][A-Za-z0-9_]*)
+  | (?P<word>(?i:LW|DW|W|B)\#16\#[0-9a-fA-F_]+|(?i:L)\#-?[0-9_]+)
   | (?P<time>(?i:TIME|T)\#-?[0-9_.a-zA-Z]+)
   | (?P<based>(?:2|8|16)\#[0-9a-fA-F_]+)
   | (?P<typed>[A-Za-z_][A-Za-z0-9_]*\#)
@@ -96,7 +99,17 @@ def _unescape(body: str, line: int, col: int) -> str:
     return "".join(out)
 
 
-def tokenize(source: str) -> list[Token]:
+# Siemens SCL (TIA Portal sources): additional keywords
+SCL_KEYWORDS = {
+    "ORGANIZATION_BLOCK", "END_ORGANIZATION_BLOCK", "DATA_BLOCK", "END_DATA_BLOCK",
+    "BEGIN", "REGION", "END_REGION", "GOTO",
+}
+_PLAIN_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def tokenize(source: str, scl: bool = False) -> list[Token]:
+    """Tokenize Structured Text; with *scl* also Siemens SCL ("Global", #local, { attributes })."""
+    keywords = KEYWORDS | SCL_KEYWORDS if scl else KEYWORDS
     tokens: list[Token] = []
     pos, line, line_start = 0, 1, 0
     n = len(source)
@@ -112,8 +125,24 @@ def tokenize(source: str) -> list[Token]:
         if kind == "string":
             tokens.append(Token("STRING", _unescape(text[1:-1], line, col), line, col, text))
         elif kind == "dstring":
-            raise STSyntaxError("Doppelte Anführungszeichen (WSTRING oder SCL-Namen) werden noch nicht unterstützt; "
-                                "Zeichenketten in ' ' schreiben", line, col)
+            if not scl:
+                raise STSyntaxError("Doppelte Anführungszeichen (WSTRING oder SCL-Namen) werden in Structured Text "
+                                    "nicht unterstützt; Zeichenketten in ' ' schreiben", line, col)
+            name = text[1:-1]
+            if not _PLAIN_NAME_RE.match(name):
+                raise STSyntaxError(f"Name \"{name}\": nur Buchstaben, Ziffern und _ werden unterstützt", line, col)
+            tokens.append(Token("IDENT", name, line, col, text))
+        elif kind == "attr":
+            if not scl:
+                raise STSyntaxError("Unerwartetes Zeichen '{'", line, col)
+        elif kind == "local":
+            if not scl:
+                raise STSyntaxError(f"Unerwartetes Zeichen '#' – lokale Namen mit # gibt es nur in SCL", line, col)
+            tokens.append(Token("IDENT", text[1:], line, col, text))
+        elif kind == "word":
+            digits = text.rsplit("#", 1)[1].replace("_", "")
+            value = int(digits, 16) if "#16#" in text else int(digits)
+            tokens.append(Token("INT", value, line, col, text))
         elif kind == "time":
             tokens.append(Token("TIME", parse_time_literal(text, line, col), line, col, text))
         elif kind == "based":
@@ -131,8 +160,16 @@ def tokenize(source: str) -> list[Token]:
             tokens.append(Token("INT", int(text.replace("_", "")), line, col, text))
         elif kind == "ident":
             upper = text.upper()
-            if upper in KEYWORDS:
+            if scl and upper == "TITLE" and source[m.end():].lstrip(" \t").startswith("="):
+                eol = source.find("\n", m.end())  # block title: free text up to the end of the line
+                pos = n if eol < 0 else eol
+                continue
+            if upper in keywords:
                 tokens.append(Token("KW", upper, line, col, text))
+                if scl and upper == "REGION":  # free text (any characters) up to the end of the line
+                    eol = source.find("\n", m.end())
+                    pos = n if eol < 0 else eol
+                    continue
             else:
                 tokens.append(Token("IDENT", text, line, col, text))
         elif kind == "op":

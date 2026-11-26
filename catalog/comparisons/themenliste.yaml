@@ -8,7 +8,7 @@ topics:
     summary: Steuerungsprogramme laufen als Software und sind über S7 und OPC UA erreichbar.
     gaps:
       - Mehrdimensionale Arrays, VAR_IN_OUT, Aufzählungstypen, WSTRING; Strukturen und Arrays als Baustein-Ein-/Ausgang
-      - Siemens-SCL-Dialekt und Import aus TIA Portal
+      - "SCL: mehrere OBs (Anlauf, Weckalarme), Startwerte in Instanz-DBs, eigene S7-DB-Nummern je Datenbaustein"
       - Ein Container je vPLC
   - id: backups
     title: Automatische SPS-Backups
