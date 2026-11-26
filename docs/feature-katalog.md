@@ -12,9 +12,9 @@ letzten Commits; die jeweils aktuelle Ansicht erzeugt jeder CI-Lauf als Artefakt
 
 | | |
 |---|---|
-| Features im Katalog | 45 in 10 Bereichen, alle per bestandenem Test nachgewiesen |
+| Features im Katalog | 48 in 10 Bereichen, alle per bestandenem Test nachgewiesen |
 | Akzeptanzkriterien / Nachweise | jedes Kriterium mit mindestens einem bestandenen Nachweis |
-| Prüfbestand | 6: Weboberfläche (5, bewusst ohne E2E-Tests), Zähler CTUD (ohne Test) |
+| Prüfbestand | 5: Weboberfläche (bewusst ohne E2E-Tests) |
 | Bedienwege | `web`, `api`, `s7`, `opcua`, `node-red`, `cli`, `entwicklung` |
 | Vergleich | Themenliste der Anforderung (`catalog/comparisons/themenliste.yaml`), jedes Feature eingestuft |
 | Nachweisquellen | pytest (vPLC und Werkzeug), mocha (Node-RED-Paket) als JUnit-XML |
@@ -112,7 +112,6 @@ Heuristik und ersetzt das Review nicht.
 ## Offene Punkte
 
 - Weboberfläche: E2E-Tests (z. B. Playwright) würden die fünf Web-Features aus dem Prüfbestand holen.
-- CTUD: Unit-Test in `tests/test_function_blocks.py` ergänzen.
 - Reviewpflicht technisch absichern: Für `catalog/features/` einen Eintrag in `.github/CODEOWNERS` anlegen,
   sobald feststeht, wer Änderungen am Katalog freigibt.
 - Optional für Kernfunktionen: Mutationstests (mutmut) auf Compiler und Runtime.

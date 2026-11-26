@@ -49,12 +49,16 @@ class SourceCheck(BaseModel):
     source: str = Field(max_length=1_000_000)
 
 
+Scalar = bool | int | float | str
+Value = Scalar | list[bool | int | float]  # lists for ARRAY variables
+
+
 class VariableWrite(BaseModel):
-    value: bool | int | float | str
+    value: Value
 
 
 class VariablesWrite(BaseModel):
-    values: dict[str, bool | int | float | str] = Field(min_length=1, max_length=1000)
+    values: dict[str, Value] = Field(min_length=1, max_length=1000)
 
 
 def _json_value(v):

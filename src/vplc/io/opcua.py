@@ -99,13 +99,13 @@ class OpcUaEndpoint:
         for var in exposed_variables(program):
             vtype = getattr(ua.VariantType, var.type.opcua)
             node = await self._folder.add_variable(
-                self._nid(var.name), var.name, ua.Variant(var.value, vtype)
+                self._nid(var.name), var.name, ua.Variant(var.snapshot(), vtype)
             )
             if var.writable:
                 await node.set_writable()
             key = var.name.upper()
             self._nodes[key] = (node, vtype)
-            self._published[key] = var.value
+            self._published[key] = var.snapshot()
         await self._status["Program"].write_value(program_label)
 
     async def collect_writes(self) -> dict[str, object]:
@@ -127,8 +127,8 @@ class OpcUaEndpoint:
                 if var is None:
                     continue
                 if not _equal(self._published.get(key), var.value):
-                    await node.write_value(ua.Variant(var.value, vtype))
-                    self._published[key] = var.value
+                    await node.write_value(ua.Variant(var.snapshot(), vtype))
+                    self._published[key] = var.snapshot()
         await self._status["Mode"].write_value(status["mode"])
         await self._status["ScanCount"].write_value(
             ua.Variant(status["scan_count"], ua.VariantType.UInt64))

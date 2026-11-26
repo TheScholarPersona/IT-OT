@@ -31,7 +31,7 @@ features:
     summary: Setzt den Wert einer Variable; im RUN übernimmt die vPLC ihn zu Beginn des nächsten Zyklus.
     usage:
       - channel: api
-        text: "`PUT /api/plcs/{plc}/variables/{name}` mit `{value}`."
+        text: "`PUT /api/plcs/{plc}/variables/{name}` mit `{value}`; Array-Element `…/variables/Werte[3]`, ganzes Array als Liste."
       - channel: node-red
         text: "Node `vplc out` mit Variable im Node oder in `msg.topic`."
     rules:
@@ -56,11 +56,15 @@ features:
       - id: typumwandlung
         kind: regel
         text: Ein zu großer Wert für eine INT-Variable läuft wie auf der SPS über.
+      - id: arrays
+        kind: effekt
+        text: Ein Array-Element wird als `Name[i]` geschrieben, ein ganzes Array als Liste; falscher Index (`404`) oder falsche Länge (`400`) werden abgelehnt.
     evidence:
       - { kind: integration, file: tests/test_stream_api.py, test: test_stream_snapshot_changes_and_status, covers: [wirkt-im-zyklus] }
       - { kind: integration, file: tests/test_api.py, test: test_full_lifecycle, covers: [unbekannt] }
       - { kind: integration, file: tests/test_stream_api.py, test: test_name_lookup_and_bulk_write, covers: [konstante] }
       - { kind: integration, file: tests/test_runtime_protocols.py, test: test_write_variable_validation, covers: [typumwandlung] }
+      - { kind: integration, file: tests/test_arrays_protocols.py, test: test_arrays_and_function_blocks_through_the_api, covers: [arrays] }
     comparisons: { themenliste: vplc }
 
   - id: prozessdaten.mehrere-schreiben

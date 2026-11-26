@@ -7,7 +7,7 @@ topics:
     status: vorhanden
     summary: Steuerungsprogramme laufen als Software und sind über S7 und OPC UA erreichbar.
     gaps:
-      - Arrays, Strukturen, STRING und eigene Funktionsbausteine
+      - Strukturen (STRUCT/UDT), STRING, mehrdimensionale Arrays, VAR_IN_OUT
       - Siemens-SCL-Dialekt und Import aus TIA Portal
       - Ein Container je vPLC
   - id: backups

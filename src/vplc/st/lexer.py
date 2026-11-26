@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from .errors import STSyntaxError
 
 KEYWORDS = {
-    "PROGRAM", "END_PROGRAM", "VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_IN_OUT",
+    "PROGRAM", "END_PROGRAM", "FUNCTION", "END_FUNCTION", "FUNCTION_BLOCK", "END_FUNCTION_BLOCK",
+    "ARRAY", "VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_IN_OUT",
     "VAR_TEMP", "END_VAR", "CONSTANT", "RETAIN",
     "IF", "THEN", "ELSIF", "ELSE", "END_IF",
     "CASE", "OF", "END_CASE",

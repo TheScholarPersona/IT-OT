@@ -76,15 +76,3 @@ features:
     state: nicht-nachgewiesen
     reason: Keine E2E-Tests (siehe web.vplc-verwalten).
 
-  - id: programmierung.zaehler-auf-ab
-    title: Auf-/Abwärtszähler CTUD
-    group: programmierung.bibliothek
-    summary: Kombinierter Auf- und Abwärtszähler mit Laden und Rücksetzen.
-    usage:
-      - channel: entwicklung
-        text: "`c(CU := a, CD := b, R := r, LD := l, PV := 10);`"
-    technical:
-      components: [src/vplc/st/stdlib.py]
-    comparisons: { themenliste: vplc }
-    state: nicht-nachgewiesen
-    reason: Implementiert, aber ohne Test. Nachweis durch einen Unit-Test in tests/test_function_blocks.py nachholen.

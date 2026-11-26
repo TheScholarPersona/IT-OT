@@ -90,6 +90,15 @@ def test_s7_layout_lists_absolute_addresses(client):
         ("Soll", "DB1.DBW0"), ("Zaehler", "DB1.DBD2"), ("Merker", "DB1.DBX6.0")]
 
 
+def test_rejects_watchdog_shorter_than_cycle_time(client):
+    r = client.post("/api/plcs", json={"name": "Wd", "cycle_ms": 50, "watchdog_ms": 20})
+    assert r.status_code == 400
+    assert "Zykluszeitüberwachung" in r.json()["detail"]
+    assert client.get("/api/plcs").json() == []
+    ok = client.post("/api/plcs", json={"name": "Wd", "cycle_ms": 50, "watchdog_ms": 50})
+    assert ok.status_code == 201 and ok.json()["watchdog_ms"] == 50
+
+
 def test_cli_check_reports_errors_with_line_and_column(tmp_path, capsys):
     good = tmp_path / "gut.st"
     good.write_text(PROG, encoding="utf-8")

@@ -1,21 +1,21 @@
 {
   "title": "IT-OT vPLC – Feature-Katalog",
-  "generated": "2026-11-26T11:25:51+00:00",
+  "generated": "2026-11-26T13:45:54+00:00",
   "reports": [
     "catalog-junit.xml",
     "nodered-junit.xml",
     "pytest-junit.xml"
   ],
   "stats": {
-    "features": 45,
-    "proven": 45,
-    "review": 6,
+    "features": 48,
+    "proven": 48,
+    "review": 5,
     "areas": 10,
     "areasDone": 10,
     "errors": 0,
     "warnings": 0,
-    "criteria": 111,
-    "evidence": 101,
+    "criteria": 130,
+    "evidence": 120,
     "components": 36
   },
   "areas": [
@@ -74,6 +74,11 @@
           "id": "programmierung.bibliothek",
           "title": "Standardbibliothek",
           "summary": ""
+        },
+        {
+          "id": "programmierung.bausteine",
+          "title": "Eigene Bausteine",
+          "summary": "Funktionen und Funktionsbausteine im eigenen Quelltext."
         },
         {
           "id": "programmierung.pruefung",
@@ -575,7 +580,7 @@
       ],
       "rules": [
         "Der Name ist eindeutig, ohne Rücksicht auf Groß-/Kleinschreibung (`409`).",
-        "Die Zykluszeit liegt zwischen 1 und 10 000 ms (`400`)."
+        "Die Zykluszeit liegt zwischen 1 und 10 000 ms, die Zyklusüberwachung nicht darunter (`400`)."
       ],
       "dependsOn": [],
       "technical": {
@@ -592,8 +597,7 @@
         "nodes": [],
         "uiRoutes": [],
         "notes": [
-          "Ports ab `VPLC_S7_BASE_PORT` (10102) und `VPLC_OPCUA_BASE_PORT` (4840); belegte Ports werden übersprungen.",
-          "Die Zyklusüberwachung darf nicht kleiner als die Zykluszeit sein (geprüft, aber noch ohne eigenen Test)."
+          "Ports ab `VPLC_S7_BASE_PORT` (10102) und `VPLC_OPCUA_BASE_PORT` (4840); belegte Ports werden übersprungen."
         ]
       },
       "acceptance": [
@@ -626,6 +630,12 @@
           "kind": "regel",
           "text": "Eine Zykluszeit von 0 ms wird abgelehnt.",
           "code": "400"
+        },
+        {
+          "id": "watchdog-gueltig",
+          "kind": "regel",
+          "text": "Eine Zyklusüberwachung unter der Zykluszeit wird abgelehnt, es wird keine vPLC angelegt.",
+          "code": "400"
         }
       ],
       "evidence": [
@@ -653,6 +663,14 @@
           "test": "test_deletes_plc_together_with_its_versions",
           "covers": [
             "in-liste"
+          ]
+        },
+        {
+          "kind": "integration",
+          "file": "tests/test_operation_api.py",
+          "test": "test_rejects_watchdog_shorter_than_cycle_time",
+          "covers": [
+            "watchdog-gueltig"
           ]
         }
       ],
@@ -689,7 +707,7 @@
             "mit-programm"
           ],
           "found": true,
-          "line": 105,
+          "line": 114,
           "has_assertion": true,
           "status_only": false,
           "related": true,
@@ -710,6 +728,21 @@
           "related": true,
           "outcome": "bestanden",
           "message": ""
+        },
+        {
+          "file": "tests/test_operation_api.py",
+          "test": "test_rejects_watchdog_shorter_than_cycle_time",
+          "kind": "integration",
+          "covers": [
+            "watchdog-gueltig"
+          ],
+          "found": true,
+          "line": 93,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
         }
       ],
       "endpointInfo": [
@@ -721,6 +754,9 @@
             "tests/test_api.py:67",
             "tests/test_api.py:68",
             "tests/test_api.py:73",
+            "tests/test_arrays_protocols.py:105",
+            "tests/test_operation_api.py:94",
+            "tests/test_operation_api.py:98",
             "tests/test_operation_api.py:43",
             "tests/test_operation_api.py:55",
             "tests/test_operation_api.py:66",
@@ -741,6 +777,7 @@
             "tests/test_api.py:93",
             "tests/test_api.py:94",
             "tests/test_operation_api.py:44",
+            "tests/test_operation_api.py:97",
             "tests/test_operation_api.py:49"
           ]
         }
@@ -890,7 +927,7 @@
             "erreichbar-und-persistent"
           ],
           "found": true,
-          "line": 105,
+          "line": 114,
           "has_assertion": true,
           "status_only": false,
           "related": true,
@@ -2703,6 +2740,12 @@
           "kind": "regel",
           "text": "Der Schreibversuch auf eine Konstante wird mit einem OPC-UA-Statusfehler abgelehnt.",
           "code": "UaStatusCodeError"
+        },
+        {
+          "id": "arrays",
+          "kind": "effekt",
+          "text": "Arrays sind ein Knoten mit Array-Wert; ein von außen geschriebenes Array wirkt auf das Programm.",
+          "code": null
         }
       ],
       "evidence": [
@@ -2713,6 +2756,14 @@
           "covers": [
             "schreiben-wirkt",
             "konstante-geschuetzt"
+          ]
+        },
+        {
+          "kind": "integration",
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_arrays_over_opcua",
+          "covers": [
+            "arrays"
           ]
         }
       ],
@@ -2734,6 +2785,21 @@
           ],
           "found": true,
           "line": 82,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_arrays_over_opcua",
+          "kind": "integration",
+          "covers": [
+            "arrays"
+          ],
+          "found": true,
+          "line": 90,
           "has_assertion": true,
           "status_only": false,
           "related": true,
@@ -4194,7 +4260,7 @@
       "id": "programmierung.zaehler-flanken",
       "title": "Zähler, Flanken und Speicherglieder",
       "group": "programmierung.bibliothek",
-      "summary": "CTU, CTD, R_TRIG, F_TRIG, SR und RS.",
+      "summary": "CTU, CTD, CTUD, R_TRIG, F_TRIG, SR und RS.",
       "description": "",
       "usage": [
         {
@@ -4212,9 +4278,7 @@
         "commands": [],
         "nodes": [],
         "uiRoutes": [],
-        "notes": [
-          "Der kombinierte Zähler CTUD steht im Prüfbestand."
-        ]
+        "notes": []
       },
       "acceptance": [
         {
@@ -4227,6 +4291,12 @@
           "id": "zaehler",
           "kind": "effekt",
           "text": "CTU zählt steigende Flanken bis PV und wird mit R zurückgesetzt; CTD zählt vom geladenen PV abwärts.",
+          "code": null
+        },
+        {
+          "id": "auf-ab",
+          "kind": "effekt",
+          "text": "CTUD zählt auf und ab, meldet QU/QD, lädt PV mit LD und setzt mit R zurück; gleichzeitige Flanken heben sich auf.",
           "code": null
         },
         {
@@ -4267,6 +4337,14 @@
           "test": "test_sr_rs",
           "covers": [
             "speicher"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_function_blocks.py",
+          "test": "test_ctud_counts_up_and_down_with_load_and_reset",
+          "covers": [
+            "auf-ab"
           ]
         }
       ],
@@ -4332,6 +4410,21 @@
           ],
           "found": true,
           "line": 89,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_function_blocks.py",
+          "test": "test_ctud_counts_up_and_down_with_load_and_reset",
+          "kind": "unit",
+          "covers": [
+            "auf-ab"
+          ],
+          "found": true,
+          "line": 98,
           "has_assertion": true,
           "status_only": false,
           "related": true,
@@ -4562,7 +4655,7 @@
             "cli"
           ],
           "found": true,
-          "line": 93,
+          "line": 102,
           "has_assertion": true,
           "status_only": false,
           "related": true,
@@ -4697,6 +4790,536 @@
       "findings": []
     },
     {
+      "id": "programmierung.arrays",
+      "title": "Arrays",
+      "group": "programmierung.sprache",
+      "summary": "Eindimensionale Arrays elementarer Typen mit beliebiger Untergrenze, Initialwertlisten und Indexzugriff.",
+      "description": "",
+      "usage": [
+        {
+          "channel": "entwicklung",
+          "text": "`Werte : ARRAY[0..9] OF INT := [1, 2, 8(0)];` – Zugriff `Werte[i]`, Kopie `b := a;`."
+        }
+      ],
+      "rules": [
+        "Ein Index außerhalb der Grenzen ist ein Laufzeitfehler (die vPLC geht in STOP).",
+        "Ganze Arrays lassen sich nur gleichartigen Arrays zuweisen.",
+        "Mehrdimensionale Arrays, Arrays von Bausteinen und Arrays als Baustein-Ein-/Ausgang sind noch nicht möglich."
+      ],
+      "dependsOn": [],
+      "technical": {
+        "components": [
+          "src/vplc/st/parser.py",
+          "src/vplc/st/compiler.py"
+        ],
+        "endpoints": [],
+        "commands": [],
+        "nodes": [],
+        "uiRoutes": [],
+        "notes": []
+      },
+      "acceptance": [
+        {
+          "id": "init-index-schleife",
+          "kind": "effekt",
+          "text": "Initialwerte mit Wiederholung (`3(10)`), Untergrenze ≠ 0, Lesen und Schreiben per Index in Schleifen liefern die erwarteten Werte.",
+          "code": null
+        },
+        {
+          "id": "index-grenze",
+          "kind": "regel",
+          "text": "Ein Index außerhalb der Grenzen bricht mit Meldung und Zeilennummer ab.",
+          "code": null
+        },
+        {
+          "id": "kopie",
+          "kind": "regel",
+          "text": "Eine Array-Zuweisung kopiert die Werte; ungleiche Arrays werden beim Prüfen abgelehnt.",
+          "code": null
+        },
+        {
+          "id": "deklarationsfehler",
+          "kind": "regel",
+          "text": "Zu viele Initialwerte, vertauschte Grenzen, fehlender Index und Index auf Nicht-Arrays werden gemeldet.",
+          "code": null
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_arrays_with_initial_values_indices_and_loops",
+          "covers": [
+            "init-index-schleife"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_array_index_out_of_range_is_runtime_error",
+          "covers": [
+            "index-grenze"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_whole_array_copy_requires_same_shape",
+          "covers": [
+            "kopie"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_array_declaration_errors",
+          "covers": [
+            "deklarationsfehler"
+          ]
+        }
+      ],
+      "comparisons": {
+        "themenliste": "vplc"
+      },
+      "area": "programmierung",
+      "inReview": false,
+      "status": "nachgewiesen",
+      "uncovered": [],
+      "evidenceResults": [
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_arrays_with_initial_values_indices_and_loops",
+          "kind": "unit",
+          "covers": [
+            "init-index-schleife"
+          ],
+          "found": true,
+          "line": 17,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_array_index_out_of_range_is_runtime_error",
+          "kind": "unit",
+          "covers": [
+            "index-grenze"
+          ],
+          "found": true,
+          "line": 37,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_whole_array_copy_requires_same_shape",
+          "kind": "unit",
+          "covers": [
+            "kopie"
+          ],
+          "found": true,
+          "line": 44,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_array_declaration_errors",
+          "kind": "unit",
+          "covers": [
+            "deklarationsfehler"
+          ],
+          "found": true,
+          "line": 53,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        }
+      ],
+      "endpointInfo": [],
+      "findings": []
+    },
+    {
+      "id": "programmierung.eigene-funktionsbausteine",
+      "title": "Eigene Funktionsbausteine",
+      "group": "programmierung.bausteine",
+      "summary": "FUNCTION_BLOCKs mit Ein-/Ausgängen und Gedächtnis; jede Instanz hat eigene Werte und darf weitere Bausteine enthalten.",
+      "description": "Bausteine werden im selben Quelltext wie das Programm deklariert, in beliebiger Reihenfolge.\nSie können Standardbausteine wie TON oder andere eigene Bausteine enthalten. Wird ein Programm im RUN\nneu geladen, behalten Instanzen ihre Werte und laufen mit dem neuen Code.\n",
+      "usage": [
+        {
+          "channel": "entwicklung",
+          "text": "`FUNCTION_BLOCK Zaehler … END_FUNCTION_BLOCK`; Instanz `a : Zaehler;`, Aufruf `a(Takt := t, Stand => x);`, Ausgang `a.Stand`."
+        },
+        {
+          "channel": "api",
+          "text": "Ein- und Ausgänge der Instanzen erscheinen in der Variablenliste (z. B. `m.MITTEL`)."
+        }
+      ],
+      "rules": [
+        "Ein Baustein darf sich nicht selbst (auch nicht über andere) enthalten.",
+        "Unbekannte Ein- und Ausgänge werden beim Prüfen gemeldet."
+      ],
+      "dependsOn": [],
+      "technical": {
+        "components": [
+          "src/vplc/st/compiler.py",
+          "src/vplc/st/parser.py",
+          "src/vplc/runtime.py"
+        ],
+        "endpoints": [
+          "GET /api/plcs/{plc_id}/variables"
+        ],
+        "commands": [],
+        "nodes": [],
+        "uiRoutes": [],
+        "notes": []
+      },
+      "acceptance": [
+        {
+          "id": "eigene-werte",
+          "kind": "effekt",
+          "text": "Zwei Instanzen zählen unabhängig; Ausgänge sind über `=>` und `instanz.Ausgang` lesbar; ein enthaltener TON läuft mit der Zeit der vPLC.",
+          "code": null
+        },
+        {
+          "id": "warmstart",
+          "kind": "effekt",
+          "text": "Nach dem Nachladen eines geänderten Bausteins behält die Instanz ihren Stand und rechnet mit dem neuen Code.",
+          "code": null
+        },
+        {
+          "id": "fehler",
+          "kind": "regel",
+          "text": "Unbekannte Ein- oder Ausgänge und ein sich selbst enthaltender Baustein werden gemeldet.",
+          "code": null
+        },
+        {
+          "id": "in-api",
+          "kind": "effekt",
+          "text": "Die Ausgänge einer Bausteininstanz erscheinen in der Variablenliste der API.",
+          "code": null
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_user_function_block_instances_have_their_own_state",
+          "covers": [
+            "eigene-werte"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_warm_restart_keeps_fb_state_but_runs_new_code",
+          "covers": [
+            "warmstart"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_member_access_and_errors_of_user_function_blocks",
+          "covers": [
+            "fehler"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_recursion_and_self_containing_function_blocks_are_rejected",
+          "covers": [
+            "fehler"
+          ]
+        },
+        {
+          "kind": "integration",
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_arrays_and_function_blocks_through_the_api",
+          "covers": [
+            "in-api"
+          ]
+        }
+      ],
+      "comparisons": {
+        "themenliste": "vplc"
+      },
+      "area": "programmierung",
+      "inReview": false,
+      "status": "nachgewiesen",
+      "uncovered": [],
+      "evidenceResults": [
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_user_function_block_instances_have_their_own_state",
+          "kind": "unit",
+          "covers": [
+            "eigene-werte"
+          ],
+          "found": true,
+          "line": 92,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_warm_restart_keeps_fb_state_but_runs_new_code",
+          "kind": "unit",
+          "covers": [
+            "warmstart"
+          ],
+          "found": true,
+          "line": 116,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_member_access_and_errors_of_user_function_blocks",
+          "kind": "unit",
+          "covers": [
+            "fehler"
+          ],
+          "found": true,
+          "line": 108,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_recursion_and_self_containing_function_blocks_are_rejected",
+          "kind": "unit",
+          "covers": [
+            "fehler"
+          ],
+          "found": true,
+          "line": 175,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_arrays_and_function_blocks_through_the_api",
+          "kind": "integration",
+          "covers": [
+            "in-api"
+          ],
+          "found": true,
+          "line": 101,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        }
+      ],
+      "endpointInfo": [
+        {
+          "id": "GET /api/plcs/{plc_id}/variables",
+          "summary": "variables",
+          "callers": [
+            "tests/test_api.py:47",
+            "tests/test_arrays_protocols.py:111",
+            "tests/test_operation_api.py:69",
+            "tests/test_stream_api.py:47"
+          ]
+        }
+      ],
+      "findings": []
+    },
+    {
+      "id": "programmierung.eigene-funktionen",
+      "title": "Eigene Funktionen",
+      "group": "programmierung.bausteine",
+      "summary": "FUNCTIONs ohne Gedächtnis mit Positions- oder benannten Argumenten, Vorgabewerten und Rückgabe über den Funktionsnamen.",
+      "description": "",
+      "usage": [
+        {
+          "channel": "entwicklung",
+          "text": "`FUNCTION Skaliere : REAL … END_FUNCTION`; Aufruf `Skaliere(r)` oder `Skaliere(Roh := r, Max := 50.0)`."
+        }
+      ],
+      "rules": [
+        "Rekursion (auch über andere Funktionen) wird abgelehnt.",
+        "Funktionen haben keine VAR_OUTPUT und keine Bausteininstanzen; lokale Variablen beginnen bei jedem Aufruf neu."
+      ],
+      "dependsOn": [],
+      "technical": {
+        "components": [
+          "src/vplc/st/compiler.py",
+          "src/vplc/st/parser.py"
+        ],
+        "endpoints": [],
+        "commands": [],
+        "nodes": [],
+        "uiRoutes": [],
+        "notes": []
+      },
+      "acceptance": [
+        {
+          "id": "aufruf",
+          "kind": "effekt",
+          "text": "Positions-, benannte und weggelassene Argumente (Vorgabewert) liefern das erwartete Ergebnis; RETURN beendet die Funktion vorzeitig.",
+          "code": null
+        },
+        {
+          "id": "kein-gedaechtnis",
+          "kind": "regel",
+          "text": "Zwei gleiche Aufrufe liefern dasselbe Ergebnis, weil lokale Variablen neu beginnen.",
+          "code": null
+        },
+        {
+          "id": "aufruffehler",
+          "kind": "regel",
+          "text": "Zu viele Argumente, unbekannte Eingänge und ein Aufruf ohne Klammern werden gemeldet.",
+          "code": null
+        },
+        {
+          "id": "rekursion",
+          "kind": "regel",
+          "text": "Ein Aufrufkreis A → B → A wird mit der Kette gemeldet.",
+          "code": null
+        },
+        {
+          "id": "deklaration",
+          "kind": "regel",
+          "text": "Reservierte Namen, doppelte Namen, VAR_OUTPUT und Bausteininstanzen in Funktionen sowie ein fehlendes oder doppeltes PROGRAM werden gemeldet.",
+          "code": null
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_user_functions_with_positional_named_and_default_arguments",
+          "covers": [
+            "aufruf",
+            "kein-gedaechtnis"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_function_call_errors",
+          "covers": [
+            "aufruffehler"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_recursion_and_self_containing_function_blocks_are_rejected",
+          "covers": [
+            "rekursion"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_pou_declaration_errors",
+          "covers": [
+            "deklaration"
+          ]
+        }
+      ],
+      "comparisons": {
+        "themenliste": "vplc"
+      },
+      "area": "programmierung",
+      "inReview": false,
+      "status": "nachgewiesen",
+      "uncovered": [],
+      "evidenceResults": [
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_user_functions_with_positional_named_and_default_arguments",
+          "kind": "unit",
+          "covers": [
+            "aufruf",
+            "kein-gedaechtnis"
+          ],
+          "found": true,
+          "line": 158,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_function_call_errors",
+          "kind": "unit",
+          "covers": [
+            "aufruffehler"
+          ],
+          "found": true,
+          "line": 167,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_recursion_and_self_containing_function_blocks_are_rejected",
+          "kind": "unit",
+          "covers": [
+            "rekursion"
+          ],
+          "found": true,
+          "line": 175,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_st_pou_arrays.py",
+          "test": "test_pou_declaration_errors",
+          "kind": "unit",
+          "covers": [
+            "deklaration"
+          ],
+          "found": true,
+          "line": 185,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        }
+      ],
+      "endpointInfo": [],
+      "findings": []
+    },
+    {
       "id": "prozessdaten.variablen-lesen",
       "title": "Variablen lesen",
       "group": "prozessdaten.variablen",
@@ -4827,6 +5450,7 @@
           "summary": "variables",
           "callers": [
             "tests/test_api.py:47",
+            "tests/test_arrays_protocols.py:111",
             "tests/test_operation_api.py:69",
             "tests/test_stream_api.py:47"
           ]
@@ -4843,7 +5467,7 @@
       "usage": [
         {
           "channel": "api",
-          "text": "`PUT /api/plcs/{plc}/variables/{name}` mit `{value}`."
+          "text": "`PUT /api/plcs/{plc}/variables/{name}` mit `{value}`; Array-Element `…/variables/Werte[3]`, ganzes Array als Liste."
         },
         {
           "channel": "node-red",
@@ -4893,6 +5517,12 @@
           "kind": "regel",
           "text": "Ein zu großer Wert für eine INT-Variable läuft wie auf der SPS über.",
           "code": null
+        },
+        {
+          "id": "arrays",
+          "kind": "effekt",
+          "text": "Ein Array-Element wird als `Name[i]` geschrieben, ein ganzes Array als Liste; falscher Index (`404`) oder falsche Länge (`400`) werden abgelehnt.",
+          "code": null
         }
       ],
       "evidence": [
@@ -4926,6 +5556,14 @@
           "test": "test_write_variable_validation",
           "covers": [
             "typumwandlung"
+          ]
+        },
+        {
+          "kind": "integration",
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_arrays_and_function_blocks_through_the_api",
+          "covers": [
+            "arrays"
           ]
         }
       ],
@@ -4996,6 +5634,21 @@
           "related": true,
           "outcome": "bestanden",
           "message": ""
+        },
+        {
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_arrays_and_function_blocks_through_the_api",
+          "kind": "integration",
+          "covers": [
+            "arrays"
+          ],
+          "found": true,
+          "line": 101,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
         }
       ],
       "endpointInfo": [
@@ -5005,6 +5658,10 @@
           "callers": [
             "tests/test_api.py:59",
             "tests/test_api.py:61",
+            "tests/test_arrays_protocols.py:107",
+            "tests/test_arrays_protocols.py:108",
+            "tests/test_arrays_protocols.py:109",
+            "tests/test_arrays_protocols.py:106",
             "tests/test_stream_api.py:64"
           ]
         }
@@ -5132,6 +5789,7 @@
           "id": "PUT /api/plcs/{plc_id}/variables",
           "summary": "write_variables",
           "callers": [
+            "tests/test_arrays_protocols.py:110",
             "tests/test_operation_api.py:67",
             "tests/test_stream_api.py:40",
             "tests/test_stream_api.py:44",
@@ -5418,6 +6076,12 @@
           "kind": "regel",
           "text": "Ein per S7 geschriebener Wert in einer Konstante wird wieder überschrieben.",
           "code": null
+        },
+        {
+          "id": "array-elemente",
+          "kind": "effekt",
+          "text": "Array-Elemente sind einzeln lesbar und schreibbar; ein geschriebenes Element wirkt auf das Programm.",
+          "code": null
         }
       ],
       "evidence": [
@@ -5429,6 +6093,14 @@
             "lesen",
             "schreiben",
             "konstante-geschuetzt"
+          ]
+        },
+        {
+          "kind": "integration",
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_array_elements_over_s7",
+          "covers": [
+            "array-elemente"
           ]
         }
       ],
@@ -5456,6 +6128,21 @@
           "related": true,
           "outcome": "bestanden",
           "message": ""
+        },
+        {
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_array_elements_over_s7",
+          "kind": "integration",
+          "covers": [
+            "array-elemente"
+          ],
+          "found": true,
+          "line": 71,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
         }
       ],
       "endpointInfo": [],
@@ -5474,7 +6161,8 @@
         }
       ],
       "rules": [
-        "BOOL werden bitweise gepackt, Typen ab 2 Byte beginnen auf geraden Adressen; Big Endian."
+        "BOOL werden bitweise gepackt, Typen ab 2 Byte beginnen auf geraden Adressen; Big Endian.",
+        "Arrays beginnen und enden auf geraden Adressen; ARRAY OF BOOL wird bitweise gepackt."
       ],
       "dependsOn": [],
       "technical": {
@@ -5507,6 +6195,12 @@
           "id": "kodierung",
           "kind": "regel",
           "text": "INT, REAL, BOOL und UDINT werden im S7-Format (Big Endian) kodiert.",
+          "code": null
+        },
+        {
+          "id": "array-layout",
+          "kind": "regel",
+          "text": "Arrays liegen wie im TIA Portal – Start und Ende auf geraden Adressen, BOOL-Elemente bitweise gepackt.",
           "code": null
         },
         {
@@ -5547,6 +6241,14 @@
           "test": "test_s7_layout_lists_absolute_addresses",
           "covers": [
             "api-adressen"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_s7_layout_of_arrays_like_tia_portal",
+          "covers": [
+            "array-layout"
           ]
         }
       ],
@@ -5612,6 +6314,21 @@
           ],
           "found": true,
           "line": 86,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_arrays_protocols.py",
+          "test": "test_s7_layout_of_arrays_like_tia_portal",
+          "kind": "unit",
+          "covers": [
+            "array-layout"
+          ],
+          "found": true,
+          "line": 45,
           "has_assertion": true,
           "status_only": false,
           "related": true,
@@ -5855,45 +6572,6 @@
       "evidenceResults": [],
       "endpointInfo": [],
       "findings": []
-    },
-    {
-      "id": "programmierung.zaehler-auf-ab",
-      "title": "Auf-/Abwärtszähler CTUD",
-      "group": "programmierung.bibliothek",
-      "summary": "Kombinierter Auf- und Abwärtszähler mit Laden und Rücksetzen.",
-      "description": "",
-      "usage": [
-        {
-          "channel": "entwicklung",
-          "text": "`c(CU := a, CD := b, R := r, LD := l, PV := 10);`"
-        }
-      ],
-      "rules": [],
-      "dependsOn": [],
-      "technical": {
-        "components": [
-          "src/vplc/st/stdlib.py"
-        ],
-        "endpoints": [],
-        "commands": [],
-        "nodes": [],
-        "uiRoutes": [],
-        "notes": []
-      },
-      "acceptance": [],
-      "evidence": [],
-      "comparisons": {
-        "themenliste": "vplc"
-      },
-      "state": "nicht-nachgewiesen",
-      "reason": "Implementiert, aber ohne Test. Nachweis durch einen Unit-Test in tests/test_function_blocks.py nachholen.",
-      "area": "programmierung",
-      "inReview": true,
-      "status": "prüfbestand",
-      "uncovered": [],
-      "evidenceResults": [],
-      "endpointInfo": [],
-      "findings": []
     }
   ],
   "exclusions": {
@@ -5936,7 +6614,7 @@
           "status": "vorhanden",
           "summary": "Steuerungsprogramme laufen als Software und sind über S7 und OPC UA erreichbar.",
           "gaps": [
-            "Arrays, Strukturen, STRING und eigene Funktionsbausteine",
+            "Strukturen (STRUCT/UDT), STRING, mehrdimensionale Arrays, VAR_IN_OUT",
             "Siemens-SCL-Dialekt und Import aus TIA Portal",
             "Ein Container je vPLC"
           ],
@@ -5961,6 +6639,9 @@
             "programmierung.zaehler-flanken",
             "programmierung.funktionen",
             "programmierung.beispiele",
+            "programmierung.arrays",
+            "programmierung.eigene-funktionsbausteine",
+            "programmierung.eigene-funktionen",
             "prozessdaten.variablen-lesen",
             "prozessdaten.variable-schreiben",
             "prozessdaten.mehrere-schreiben",
@@ -5968,8 +6649,7 @@
             "s7.db-zugriff",
             "s7.db-layout",
             "web.vplc-verwalten",
-            "web.variablen-beobachten",
-            "programmierung.zaehler-auf-ab"
+            "web.variablen-beobachten"
           ]
         },
         {

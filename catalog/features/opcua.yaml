@@ -20,8 +20,12 @@ features:
         kind: regel
         text: Der Schreibversuch auf eine Konstante wird mit einem OPC-UA-Statusfehler abgelehnt.
         code: UaStatusCodeError
+      - id: arrays
+        kind: effekt
+        text: Arrays sind ein Knoten mit Array-Wert; ein von außen geschriebenes Array wirkt auf das Programm.
     evidence:
       - { kind: integration, file: tests/test_runtime_protocols.py, test: test_opcua_read_write, covers: [schreiben-wirkt, konstante-geschuetzt] }
+      - { kind: integration, file: tests/test_arrays_protocols.py, test: test_arrays_over_opcua, covers: [arrays] }
     comparisons: { themenliste: vplc }
 
   - id: opcua.status-knoten

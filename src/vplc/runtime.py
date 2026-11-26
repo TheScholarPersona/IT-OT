@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -14,6 +15,8 @@ from .io.opcua import OpcUaEndpoint
 from .io.s7 import S7Endpoint
 from .st import CompiledProgram, PLCRuntimeError, STError, compile_source
 from .types import coerce, format_time
+
+_ELEMENT_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\[\s*(-?\d+)\s*\]$")
 
 log = logging.getLogger(__name__)
 
@@ -193,52 +196,79 @@ class VirtualPLC:
         self.diag("info", "Urlöschen / Kaltstart – alle Werte zurückgesetzt")
 
     # ------------------------------------------------------------ variables
-    def write_variable(self, name: str, value) -> object:
+    def _resolve(self, name: str):
+        """'Soll' -> (var, None); 'Werte[3]' -> (array var, 3). Raises KeyError/PermissionError."""
         if self.program is None:
             raise KeyError(name)
-        var = self.program.variables.get(name.upper())
+        m = _ELEMENT_RE.match(name.strip())
+        base, index = (m.group(1), int(m.group(2))) if m else (name.strip(), None)
+        var = self.program.variables.get(base.upper())
         if var is None:
             raise KeyError(name)
+        if index is not None:
+            if not var.is_array:
+                raise KeyError(name)
+            try:
+                var.element_index(index)
+            except IndexError as e:
+                raise KeyError(str(e)) from None
         if not var.writable:
             raise PermissionError(f"'{var.name}' ist eine Konstante")
-        coerced = coerce(var.type, value)
+        return var, index
+
+    @staticmethod
+    def _coerce(var, index, value):
+        return coerce(var.type, value) if index is not None else var.coerce(value)
+
+    @staticmethod
+    def _key(var, index) -> str:
+        return var.name.upper() if index is None else f"{var.name.upper()}[{index}]"
+
+    def write_variable(self, name: str, value) -> object:
+        """Write a variable ('Soll'), a whole array (list) or one element ('Werte[3]')."""
+        var, index = self._resolve(name)
+        coerced = self._coerce(var, index, value)
         if self.mode == RUN:
-            self._pending[var.name.upper()] = coerced
+            self._pending[self._key(var, index)] = coerced
         else:
-            var.value = coerced
+            self._store(var, index, coerced)
             if self.s7:
                 self.s7.publish(self.program)
         return coerced
+
+    @staticmethod
+    def _store(var, index, value) -> None:
+        if index is None:
+            var.value = list(value) if var.is_array else value
+        else:
+            var.value[var.element_index(index)] = value
 
     def validate_writes(self, values: dict[str, object]) -> None:
         """Raise KeyError/PermissionError/ValueError if any write would be rejected."""
         if self.program is None:
             raise KeyError(next(iter(values), ""))
         for name, value in values.items():
-            var = self.program.variables.get(name.upper())
-            if var is None:
-                raise KeyError(name)
-            if not var.writable:
-                raise PermissionError(f"'{var.name}' ist eine Konstante")
-            coerce(var.type, value)
+            var, index = self._resolve(name)
+            self._coerce(var, index, value)
 
     def values(self) -> dict[str, object]:
-        """Current values of all exposed variables (name → value)."""
+        """Current values of all exposed variables (name → value; arrays as list copies)."""
         if self.program is None:
             return {}
-        return {v.name: v.value for v in self.program.variables.values() if v.section != "VAR_TEMP"}
+        return {v.name: v.snapshot() for v in self.program.variables.values() if v.section != "VAR_TEMP"}
 
     def _apply_external(self, writes: dict[str, object]) -> None:
         if not writes or self.program is None:
             return
         for key, value in writes.items():
-            var = self.program.variables.get(key)
-            if var is None or not var.writable:
+            try:
+                var, index = self._resolve(key)
+            except (KeyError, PermissionError):
                 continue
             try:
-                var.value = coerce(var.type, value)
+                self._store(var, index, self._coerce(var, index, value))
             except (ValueError, TypeError, OverflowError):
-                self.diag("warning", f"Ungültiger Wert für {var.name} verworfen")
+                self.diag("warning", f"Ungültiger Wert für {key} verworfen")
 
     def variables(self) -> list[dict]:
         if self.program is None:
@@ -246,17 +276,18 @@ class VirtualPLC:
         layout = {e["name"].upper(): e for e in self.s7.layout()} if self.s7 else {}
         out = []
         for key, var in self.program.variables.items():
-            entry = layout.get(key)
+            entry = layout.get(key) or layout.get(f"{key}[{var.dims[0]}]" if var.is_array else "")
             out.append({
                 "name": var.name,
-                "type": var.type.name,
+                "type": var.type_label,
                 "section": var.section,
                 "constant": var.constant,
                 "retain": var.retain,
                 "writable": var.writable,
-                "value": var.value,
-                "display": format_time(var.value) if var.type.kind == "time" else None,
-                "s7_address": entry["address"] if entry else None,
+                "value": var.snapshot(),
+                "display": (format_time(var.value) if var.type.kind == "time" and not var.is_array else None),
+                "s7_address": (None if not entry else entry["address"] if not var.is_array
+                               else f"{entry['address']} … ({var.length} Elemente)"),
                 "opcua_node": f"ns=2;s={var.name}" if self.opcua and var.section != "VAR_TEMP" else None,
             })
         for fb in self.program.fbs.values():

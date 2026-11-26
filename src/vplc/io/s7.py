@@ -20,12 +20,17 @@ S7_CPU_STOP = 0x04
 
 @dataclass
 class S7Entry:
-    name: str
-    key: str
+    name: str  # "Soll" or "Werte[3]" for array elements
+    key: str  # upper-case variable name
     type: IecType
     byte: int
     bit: int
     writable: bool
+    index: int | None = None  # array element index (declared index, e.g. 1 for ARRAY[1..5])
+
+    @property
+    def write_key(self) -> str:
+        return self.key if self.index is None else f"{self.key}[{self.index}]"
 
     def address(self, db: int) -> str:
         t = self.type
@@ -41,12 +46,28 @@ def build_layout(variables: list[Variable]) -> tuple[list[S7Entry], int]:
     """Assign S7 offsets like a non-optimized TIA Portal DB.
 
     BOOLs are packed bit by bit; every other type starts on a new byte and types
-    larger than one byte are aligned to an even address.
+    larger than one byte are aligned to an even address. Arrays start and end on an
+    even address; ARRAY OF BOOL is packed bit by bit inside.
     """
     entries: list[S7Entry] = []
     byte, bit = 0, 0
     for var in variables:
         t = var.type
+        if getattr(var, "dims", None):
+            if bit:
+                byte, bit = byte + 1, 0
+            byte += byte % 2
+            low, high = var.dims
+            for n, index in enumerate(range(low, high + 1)):
+                name = f"{var.name}[{index}]"
+                if t.kind == "bool":
+                    entries.append(S7Entry(name, var.name.upper(), t, byte + n // 8, n % 8, var.writable, index))
+                else:
+                    entries.append(S7Entry(name, var.name.upper(), t, byte + n * t.size, 0, var.writable, index))
+            length = high - low + 1
+            byte += (length + 7) // 8 if t.kind == "bool" else length * t.size
+            byte += byte % 2
+            continue
         if t.kind == "bool":
             if bit == 8:
                 byte, bit = byte + 1, 0
@@ -172,7 +193,7 @@ class S7Endpoint:
             new = decode(e.type, current, e.byte, e.bit)
             old = decode(e.type, self.shadow, e.byte, e.bit)
             if new != old and not (new != new and old != old):  # ignore NaN == NaN
-                writes[e.key] = new
+                writes[e.write_key] = new
         return writes
 
     def publish(self, program: CompiledProgram) -> None:
@@ -182,8 +203,10 @@ class S7Endpoint:
         try:
             for e in self.entries:
                 var = variables.get(e.key)
-                if var is not None:
-                    encode(e.type, var.value, self.db, e.byte, e.bit)
+                if var is None:
+                    continue
+                value = var.value if e.index is None else var.value[e.index - var.dims[0]]
+                encode(e.type, value, self.db, e.byte, e.bit)
             self.shadow = bytes(self.db)
         finally:
             self._unlock(locked)

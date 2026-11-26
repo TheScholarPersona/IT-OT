@@ -8,7 +8,7 @@ from .lexer import Token, tokenize
 
 _VAR_SECTIONS = {"VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_TEMP", "VAR_IN_OUT"}
 _STMT_END = {
-    "END_PROGRAM", "END_IF", "ELSIF", "ELSE", "END_CASE", "END_FOR",
+    "END_PROGRAM", "END_FUNCTION", "END_FUNCTION_BLOCK", "END_IF", "ELSIF", "ELSE", "END_CASE", "END_FOR",
     "END_WHILE", "UNTIL", "END_REPEAT",
 }
 
@@ -66,24 +66,72 @@ class Parser:
         if self.is_op(";"):
             self.advance()
 
-    # ------------------------------------------------------------ program
-    def parse_program(self) -> ast.Program:
-        start = self.expect_kw("PROGRAM")
-        name = self.expect_ident().value
+    # ------------------------------------------------------------ program organisation units
+    def parse_source(self) -> ast.Program:
+        """One PROGRAM plus any number of FUNCTION_BLOCKs and FUNCTIONs, in any order."""
+        program: ast.Program | None = None
+        fbs: list[ast.FunctionBlockDecl] = []
+        functions: list[ast.FunctionDecl] = []
+        while self.tok.kind != "EOF":
+            if self.is_kw("PROGRAM"):
+                if program is not None:
+                    raise self.error("Nur ein PROGRAM je Quelltext erlaubt")
+                program = self.parse_program()
+            elif self.is_kw("FUNCTION_BLOCK"):
+                fbs.append(self.parse_function_block())
+            elif self.is_kw("FUNCTION"):
+                functions.append(self.parse_function())
+            else:
+                raise self.error(f"PROGRAM, FUNCTION_BLOCK oder FUNCTION erwartet, gefunden {self.describe(self.tok)}")
+        if program is None:
+            raise self.error("PROGRAM erwartet – der Quelltext enthält kein Programm")
+        program.function_blocks = fbs
+        program.functions = functions
+        return program
+
+    def _decls(self) -> list[ast.VarDecl]:
         decls: list[ast.VarDecl] = []
         while self.is_kw(*_VAR_SECTIONS):
             decls.extend(self.parse_var_block())
+        return decls
+
+    def parse_program(self) -> ast.Program:
+        start = self.expect_kw("PROGRAM")
+        name = self.expect_ident().value
+        decls = self._decls()
         body = self.parse_statements()
         self.expect_kw("END_PROGRAM")
-        if self.tok.kind != "EOF":
-            raise self.error(f"Unerwarteter Text nach END_PROGRAM: {self.describe(self.tok)}")
+        self.optional_semicolon()
         return ast.Program(name, decls, body, line=start.line, col=start.col)
+
+    def parse_function_block(self) -> ast.FunctionBlockDecl:
+        start = self.expect_kw("FUNCTION_BLOCK")
+        name = self.expect_ident().value
+        decls = self._decls()
+        body = self.parse_statements()
+        self.expect_kw("END_FUNCTION_BLOCK")
+        self.optional_semicolon()
+        return ast.FunctionBlockDecl(name, decls, body, line=start.line, col=start.col)
+
+    def parse_function(self) -> ast.FunctionDecl:
+        start = self.expect_kw("FUNCTION")
+        name = self.expect_ident().value
+        self.expect_op(":")
+        if self.tok.kind != "IDENT":
+            raise self.error(f"Rückgabetyp erwartet, gefunden {self.describe(self.tok)}")
+        return_type = self.advance().value.upper()
+        self.optional_semicolon()
+        decls = self._decls()
+        body = self.parse_statements()
+        self.expect_kw("END_FUNCTION")
+        self.optional_semicolon()
+        return ast.FunctionDecl(name, return_type, decls, body, line=start.line, col=start.col)
 
     def parse_var_block(self) -> list[ast.VarDecl]:
         section_tok = self.advance()
         section = section_tok.value
         if section == "VAR_IN_OUT":
-            raise self.error("VAR_IN_OUT wird in Programmen nicht unterstützt", section_tok)
+            raise self.error("VAR_IN_OUT wird noch nicht unterstützt", section_tok)
         constant = retain = False
         while self.is_kw("CONSTANT", "RETAIN"):
             if self.advance().value == "CONSTANT":
@@ -97,22 +145,57 @@ class Parser:
                 self.advance()
                 names.append(self.expect_ident())
             self.expect_op(":")
+            dims = None
+            if self.is_kw("ARRAY"):
+                dims = self.parse_array_dims()
             if self.tok.kind != "IDENT":
                 raise self.error(f"Datentyp erwartet, gefunden {self.describe(self.tok)}")
             type_name = self.advance().value.upper()
             init = None
             if self.is_op(":="):
                 self.advance()
-                init = self.parse_expr()
+                init = self.parse_array_init() if self.is_op("[") else self.parse_expr()
             self.expect_op(";")
             for n in names:
                 decls.append(ast.VarDecl(
-                    n.value, type_name, section, init, constant, retain,
+                    n.value, type_name, section, init, constant, retain, dims,
                     line=n.line, col=n.col,
                 ))
         self.expect_kw("END_VAR")
         self.optional_semicolon()
         return decls
+
+    def parse_array_dims(self) -> tuple[ast.Node, ast.Node]:
+        self.expect_kw("ARRAY")
+        self.expect_op("[")
+        low = self.parse_expr()
+        self.expect_op("..")
+        high = self.parse_expr()
+        if self.is_op(","):
+            raise self.error("Mehrdimensionale Arrays werden noch nicht unterstützt")
+        self.expect_op("]")
+        self.expect_kw("OF")
+        if self.is_kw("ARRAY"):
+            raise self.error("Mehrdimensionale Arrays werden noch nicht unterstützt")
+        return low, high
+
+    def parse_array_init(self) -> ast.ArrayInit:
+        start = self.expect_op("[")
+        items: list[tuple[ast.Node | None, ast.Node]] = []
+        while not self.is_op("]"):
+            if self.tok.kind == "INT" and self.peek().kind == "OP" and self.peek().value == "(":
+                count_tok = self.advance()
+                self.advance()  # (
+                value = self.parse_expr()
+                self.expect_op(")")
+                count = ast.Literal(count_tok.value, "ANY_INT", line=count_tok.line, col=count_tok.col)
+                items.append((count, value))
+            else:
+                items.append((None, self.parse_expr()))
+            if not self.is_op("]"):
+                self.expect_op(",")
+        self.advance()
+        return ast.ArrayInit(items, line=start.line, col=start.col)
 
     # ------------------------------------------------------------ statements
     def parse_statements(self, case_body: bool = False) -> list[ast.Node]:
@@ -158,6 +241,15 @@ class Parser:
             raise self.error(f"Anweisung erwartet, gefunden {self.describe(t)}")
         if t.kind == "IDENT":
             ident = self.advance()
+            if self.is_op("["):
+                self.advance()
+                index = self.parse_expr()
+                self.expect_op("]")
+                self.expect_op(":=")
+                value = self.parse_expr()
+                self.expect_op(";")
+                target = ast.Index(ident.value, index, line=ident.line, col=ident.col)
+                return ast.Assign(target, value, line=ident.line, col=ident.col)
             if self.is_op(":="):
                 self.advance()
                 value = self.parse_expr()
@@ -379,13 +471,26 @@ class Parser:
             self.advance()
             if self.is_op("("):
                 self.advance()
-                args = []
+                args: list[ast.Node] = []
+                named: dict[str, ast.Node] = {}
                 while not self.is_op(")"):
-                    args.append(self.parse_expr())
+                    if self.tok.kind == "IDENT" and self.peek().kind == "OP" and self.peek().value == ":=":
+                        pname = self.advance().value.upper()
+                        self.advance()
+                        named[pname] = self.parse_expr()
+                    else:
+                        if named:
+                            raise self.error("Nach benannten Argumenten sind keine Positionsargumente erlaubt")
+                        args.append(self.parse_expr())
                     if not self.is_op(")"):
                         self.expect_op(",")
                 self.advance()
-                return ast.Call(t.value.upper(), args, line=t.line, col=t.col)
+                return ast.Call(t.value.upper(), args, named, line=t.line, col=t.col)
+            if self.is_op("["):
+                self.advance()
+                index = self.parse_expr()
+                self.expect_op("]")
+                return ast.Index(t.value, index, line=t.line, col=t.col)
             if self.is_op("."):
                 self.advance()
                 member = self.expect_ident()
@@ -400,4 +505,4 @@ class Parser:
 
 
 def parse(source: str) -> ast.Program:
-    return Parser(source).parse_program()
+    return Parser(source).parse_source()

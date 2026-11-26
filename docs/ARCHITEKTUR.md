@@ -26,7 +26,7 @@
 | Modul | Aufgabe |
 |---|---|
 | `vplc/st/lexer.py`, `parser.py`, `ast.py` | Structured Text → abstrakter Syntaxbaum. Fehler mit Zeile und Spalte. |
-| `vplc/st/compiler.py` | Semantische Prüfung (sammelt *alle* Fehler) und Übersetzung des AST in Python-Closures. Kein `eval`, kein generierter Python-Quelltext. |
+| `vplc/st/compiler.py` | Semantische Prüfung (sammelt *alle* Fehler) und Übersetzung des AST in Python-Closures. Kein `eval`, kein generierter Python-Quelltext. Je Instanz eines eigenen Funktionsbausteins wird dessen Rumpf an die Instanzvariablen gebunden übersetzt; Funktionen einmal, Rekursion wird abgelehnt. |
 | `vplc/st/stdlib.py` | IEC-Funktionsbausteine (Timer, Zähler, Flanken, Bistabile) und Funktionen. |
 | `vplc/types.py` | Elementare Datentypen: Wertebereich/Überlauf, REAL als float32, S7-Kodierung (Big Endian). |
 | `vplc/runtime.py` | `VirtualPLC`: Betriebsarten, Scan-Schleife, Zykluszeitmessung, Diagnosepuffer, Warm-/Kaltstart. |
@@ -69,7 +69,8 @@ Zeitpunkte zählen als *Überschreitung*.
 
 ## Grenzen von v0.1
 
-* Keine Arrays, Strukturen, STRING, benutzerdefinierten FUNCTION_BLOCKs/FUNCTIONs.
+* Keine Strukturen (STRUCT/UDT), kein STRING, keine mehrdimensionalen Arrays, kein VAR_IN_OUT;
+  Arrays nicht als Baustein-Ein-/Ausgang.
 * Kein Echtzeitbetriebssystem: Jitter im Bereich von Millisekunden; nicht für
   harte Echtzeit oder Sicherheitsfunktionen.
 * S7: nur Datenbaustein-Zugriff (keine Bausteinliste, kein Upload/Download über S7).

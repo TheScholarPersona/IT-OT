@@ -128,13 +128,12 @@ features:
   - id: programmierung.zaehler-flanken
     title: Zähler, Flanken und Speicherglieder
     group: programmierung.bibliothek
-    summary: CTU, CTD, R_TRIG, F_TRIG, SR und RS.
+    summary: CTU, CTD, CTUD, R_TRIG, F_TRIG, SR und RS.
     usage:
       - channel: entwicklung
         text: "`c(CU := Teil.Q, R := Quittieren, PV := 10);`"
     technical:
       components: [src/vplc/st/stdlib.py]
-      notes: [Der kombinierte Zähler CTUD steht im Prüfbestand.]
     acceptance:
       - id: flanken
         kind: effekt
@@ -142,6 +141,9 @@ features:
       - id: zaehler
         kind: effekt
         text: CTU zählt steigende Flanken bis PV und wird mit R zurückgesetzt; CTD zählt vom geladenen PV abwärts.
+      - id: auf-ab
+        kind: effekt
+        text: CTUD zählt auf und ab, meldet QU/QD, lädt PV mit LD und setzt mit R zurück; gleichzeitige Flanken heben sich auf.
       - id: speicher
         kind: effekt
         text: Bei gleichzeitigem Setzen und Rücksetzen dominiert bei SR das Setzen, bei RS das Rücksetzen.
@@ -150,6 +152,7 @@ features:
       - { kind: unit, file: tests/test_function_blocks.py, test: test_ctu_and_reset, covers: [zaehler] }
       - { kind: unit, file: tests/test_function_blocks.py, test: test_ctd, covers: [zaehler] }
       - { kind: unit, file: tests/test_function_blocks.py, test: test_sr_rs, covers: [speicher] }
+      - { kind: unit, file: tests/test_function_blocks.py, test: test_ctud_counts_up_and_down_with_load_and_reset, covers: [auf-ab] }
     comparisons: { themenliste: vplc }
 
   - id: programmierung.funktionen
@@ -230,4 +233,112 @@ features:
         code: "404"
     evidence:
       - { kind: integration, file: tests/test_api.py, test: test_check_endpoint_and_examples, covers: [beispiele-geliefert, kein-ausbruch] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.arrays
+    title: Arrays
+    group: programmierung.sprache
+    summary: Eindimensionale Arrays elementarer Typen mit beliebiger Untergrenze, Initialwertlisten und Indexzugriff.
+    usage:
+      - channel: entwicklung
+        text: "`Werte : ARRAY[0..9] OF INT := [1, 2, 8(0)];` – Zugriff `Werte[i]`, Kopie `b := a;`."
+    rules:
+      - Ein Index außerhalb der Grenzen ist ein Laufzeitfehler (die vPLC geht in STOP).
+      - Ganze Arrays lassen sich nur gleichartigen Arrays zuweisen.
+      - Mehrdimensionale Arrays, Arrays von Bausteinen und Arrays als Baustein-Ein-/Ausgang sind noch nicht möglich.
+    technical:
+      components: [src/vplc/st/parser.py, src/vplc/st/compiler.py]
+    acceptance:
+      - id: init-index-schleife
+        kind: effekt
+        text: Initialwerte mit Wiederholung (`3(10)`), Untergrenze ≠ 0, Lesen und Schreiben per Index in Schleifen liefern die erwarteten Werte.
+      - id: index-grenze
+        kind: regel
+        text: Ein Index außerhalb der Grenzen bricht mit Meldung und Zeilennummer ab.
+      - id: kopie
+        kind: regel
+        text: Eine Array-Zuweisung kopiert die Werte; ungleiche Arrays werden beim Prüfen abgelehnt.
+      - id: deklarationsfehler
+        kind: regel
+        text: Zu viele Initialwerte, vertauschte Grenzen, fehlender Index und Index auf Nicht-Arrays werden gemeldet.
+    evidence:
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_arrays_with_initial_values_indices_and_loops, covers: [init-index-schleife] }
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_array_index_out_of_range_is_runtime_error, covers: [index-grenze] }
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_whole_array_copy_requires_same_shape, covers: [kopie] }
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_array_declaration_errors, covers: [deklarationsfehler] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.eigene-funktionsbausteine
+    title: Eigene Funktionsbausteine
+    group: programmierung.bausteine
+    summary: FUNCTION_BLOCKs mit Ein-/Ausgängen und Gedächtnis; jede Instanz hat eigene Werte und darf weitere Bausteine enthalten.
+    description: |
+      Bausteine werden im selben Quelltext wie das Programm deklariert, in beliebiger Reihenfolge.
+      Sie können Standardbausteine wie TON oder andere eigene Bausteine enthalten. Wird ein Programm im RUN
+      neu geladen, behalten Instanzen ihre Werte und laufen mit dem neuen Code.
+    usage:
+      - channel: entwicklung
+        text: "`FUNCTION_BLOCK Zaehler … END_FUNCTION_BLOCK`; Instanz `a : Zaehler;`, Aufruf `a(Takt := t, Stand => x);`, Ausgang `a.Stand`."
+      - channel: api
+        text: Ein- und Ausgänge der Instanzen erscheinen in der Variablenliste (z. B. `m.MITTEL`).
+    rules:
+      - Ein Baustein darf sich nicht selbst (auch nicht über andere) enthalten.
+      - Unbekannte Ein- und Ausgänge werden beim Prüfen gemeldet.
+    technical:
+      components: [src/vplc/st/compiler.py, src/vplc/st/parser.py, src/vplc/runtime.py]
+      endpoints: ["GET /api/plcs/{plc_id}/variables"]
+    acceptance:
+      - id: eigene-werte
+        kind: effekt
+        text: Zwei Instanzen zählen unabhängig; Ausgänge sind über `=>` und `instanz.Ausgang` lesbar; ein enthaltener TON läuft mit der Zeit der vPLC.
+      - id: warmstart
+        kind: effekt
+        text: Nach dem Nachladen eines geänderten Bausteins behält die Instanz ihren Stand und rechnet mit dem neuen Code.
+      - id: fehler
+        kind: regel
+        text: Unbekannte Ein- oder Ausgänge und ein sich selbst enthaltender Baustein werden gemeldet.
+      - id: in-api
+        kind: effekt
+        text: Die Ausgänge einer Bausteininstanz erscheinen in der Variablenliste der API.
+    evidence:
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_user_function_block_instances_have_their_own_state, covers: [eigene-werte] }
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_warm_restart_keeps_fb_state_but_runs_new_code, covers: [warmstart] }
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_member_access_and_errors_of_user_function_blocks, covers: [fehler] }
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_recursion_and_self_containing_function_blocks_are_rejected, covers: [fehler] }
+      - { kind: integration, file: tests/test_arrays_protocols.py, test: test_arrays_and_function_blocks_through_the_api, covers: [in-api] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.eigene-funktionen
+    title: Eigene Funktionen
+    group: programmierung.bausteine
+    summary: FUNCTIONs ohne Gedächtnis mit Positions- oder benannten Argumenten, Vorgabewerten und Rückgabe über den Funktionsnamen.
+    usage:
+      - channel: entwicklung
+        text: "`FUNCTION Skaliere : REAL … END_FUNCTION`; Aufruf `Skaliere(r)` oder `Skaliere(Roh := r, Max := 50.0)`."
+    rules:
+      - Rekursion (auch über andere Funktionen) wird abgelehnt.
+      - Funktionen haben keine VAR_OUTPUT und keine Bausteininstanzen; lokale Variablen beginnen bei jedem Aufruf neu.
+    technical:
+      components: [src/vplc/st/compiler.py, src/vplc/st/parser.py]
+    acceptance:
+      - id: aufruf
+        kind: effekt
+        text: Positions-, benannte und weggelassene Argumente (Vorgabewert) liefern das erwartete Ergebnis; RETURN beendet die Funktion vorzeitig.
+      - id: kein-gedaechtnis
+        kind: regel
+        text: Zwei gleiche Aufrufe liefern dasselbe Ergebnis, weil lokale Variablen neu beginnen.
+      - id: aufruffehler
+        kind: regel
+        text: Zu viele Argumente, unbekannte Eingänge und ein Aufruf ohne Klammern werden gemeldet.
+      - id: rekursion
+        kind: regel
+        text: Ein Aufrufkreis A → B → A wird mit der Kette gemeldet.
+      - id: deklaration
+        kind: regel
+        text: Reservierte Namen, doppelte Namen, VAR_OUTPUT und Bausteininstanzen in Funktionen sowie ein fehlendes oder doppeltes PROGRAM werden gemeldet.
+    evidence:
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_user_functions_with_positional_named_and_default_arguments, covers: [aufruf, kein-gedaechtnis] }
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_function_call_errors, covers: [aufruffehler] }
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_recursion_and_self_containing_function_blocks_are_rejected, covers: [rekursion] }
+      - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_pou_declaration_errors, covers: [deklaration] }
     comparisons: { themenliste: vplc }

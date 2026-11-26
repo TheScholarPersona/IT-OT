@@ -25,8 +25,12 @@ features:
       - id: konstante-geschuetzt
         kind: regel
         text: Ein per S7 geschriebener Wert in einer Konstante wird wieder überschrieben.
+      - id: array-elemente
+        kind: effekt
+        text: Array-Elemente sind einzeln lesbar und schreibbar; ein geschriebenes Element wirkt auf das Programm.
     evidence:
       - { kind: integration, file: tests/test_runtime_protocols.py, test: test_s7_read_write, covers: [lesen, schreiben, konstante-geschuetzt] }
+      - { kind: integration, file: tests/test_arrays_protocols.py, test: test_array_elements_over_s7, covers: [array-elemente] }
     comparisons: { themenliste: vplc }
 
   - id: s7.db-layout
@@ -38,6 +42,7 @@ features:
         text: "`GET /api/plcs/{plc}/s7-layout`; die Adressen stehen auch in der Variablenliste."
     rules:
       - BOOL werden bitweise gepackt, Typen ab 2 Byte beginnen auf geraden Adressen; Big Endian.
+      - Arrays beginnen und enden auf geraden Adressen; ARRAY OF BOOL wird bitweise gepackt.
     technical:
       components: [src/vplc/io/s7.py, src/vplc/types.py]
       endpoints: ["GET /api/plcs/{plc_id}/s7-layout"]
@@ -51,6 +56,9 @@ features:
       - id: kodierung
         kind: regel
         text: INT, REAL, BOOL und UDINT werden im S7-Format (Big Endian) kodiert.
+      - id: array-layout
+        kind: regel
+        text: Arrays liegen wie im TIA Portal – Start und Ende auf geraden Adressen, BOOL-Elemente bitweise gepackt.
       - id: api-adressen
         kind: effekt
         text: Die API liefert für ein Programm die absoluten Adressen aller Variablen.
@@ -59,4 +67,5 @@ features:
       - { kind: unit, file: tests/test_s7_layout.py, test: test_bool_packing_over_byte_boundary, covers: [bool-packung] }
       - { kind: unit, file: tests/test_s7_layout.py, test: test_encode_decode_roundtrip_big_endian, covers: [kodierung] }
       - { kind: integration, file: tests/test_operation_api.py, test: test_s7_layout_lists_absolute_addresses, covers: [api-adressen] }
+      - { kind: unit, file: tests/test_arrays_protocols.py, test: test_s7_layout_of_arrays_like_tia_portal, covers: [array-layout] }
     comparisons: { themenliste: vplc }

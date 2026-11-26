@@ -36,6 +36,9 @@ areas:
         title: Sprache und Datentypen
       - id: programmierung.bibliothek
         title: Standardbibliothek
+      - id: programmierung.bausteine
+        title: Eigene Bausteine
+        summary: Funktionen und Funktionsbausteine im eigenen Quelltext.
       - id: programmierung.pruefung
         title: Prüfung und Beispiele
 

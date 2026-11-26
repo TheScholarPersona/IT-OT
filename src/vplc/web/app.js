@@ -51,8 +51,15 @@ async function api(method, path, body, { text = false } = {}) {
   return text ? res.text() : res.json();
 }
 
+function fmtScalar(x) {
+  if (typeof x === "boolean") return x ? "TRUE" : "FALSE";
+  if (typeof x === "number" && !Number.isInteger(x)) return Number(x.toPrecision(7)).toString();
+  return String(x);
+}
+
 function fmtValue(v) {
   if (v.display) return v.display;
+  if (Array.isArray(v.value)) return "[" + v.value.map(fmtScalar).join(", ") + "]";
   if (typeof v.value === "boolean") return v.value ? "TRUE" : "FALSE";
   if (typeof v.value === "number" && !Number.isInteger(v.value)) return Number(v.value.toPrecision(7)).toString();
   return String(v.value);
@@ -237,13 +244,21 @@ function writeControl(v) {
   if (v.type === "BOOL") {
     return el("button", { class: "small", onclick: () => writeVar(v.name, !v.value) }, v.value ? "→ FALSE" : "→ TRUE");
   }
-  const input = el("input", { type: "text", placeholder: "Wert", "data-var": v.name,
+  const input = el("input", { type: "text", placeholder: Array.isArray(v.value) ? "[1, 2, …]" : "Wert", "data-var": v.name,
     onkeydown: (ev) => { if (ev.key === "Enter") submit(); } });
   const submit = () => {
     const raw = input.value.trim();
     if (!raw) return;
-    const num = Number(raw.replace(",", "."));
-    writeVar(v.name, Number.isFinite(num) ? num : raw).then(() => { input.value = ""; input.blur(); });
+    let value;
+    if (raw.startsWith("[")) {
+      // whole array, e.g. [1, 2, 3]; TRUE/FALSE are accepted as in ST
+      try { value = JSON.parse(raw.replace(/\bTRUE\b/gi, "true").replace(/\bFALSE\b/gi, "false")); }
+      catch (_) { toast("Liste nicht lesbar – Beispiel: [1, 2, 3]", true); return; }
+    } else {
+      const num = Number(raw.replace(",", "."));
+      value = Number.isFinite(num) ? num : raw;
+    }
+    writeVar(v.name, value).then(() => { input.value = ""; input.blur(); });
   };
   return el("span", {}, input, " ", el("button", { class: "small", onclick: submit }, "Setzen"));
 }
