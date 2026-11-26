@@ -1,0 +1,233 @@
+area: programmierung
+features:
+  - id: programmierung.kontrollstrukturen
+    title: Kontrollstrukturen
+    group: programmierung.sprache
+    summary: "Verzweigungen und Schleifen in Structured Text: IF/ELSIF/ELSE, CASE mit Bereichen, FOR, WHILE, REPEAT, EXIT, CONTINUE, RETURN."
+    usage:
+      - channel: entwicklung
+        text: Im Programmtext (IEC 61131-3 Structured Text).
+    technical:
+      components: [src/vplc/st/parser.py, src/vplc/st/compiler.py]
+    acceptance:
+      - id: verzweigungen
+        kind: effekt
+        text: IF/ELSIF/ELSE und CASE mit Einzelwerten, Listen, Bereichen und ELSE wählen den richtigen Zweig.
+      - id: schleifen
+        kind: effekt
+        text: FOR (auch rückwärts mit BY), WHILE und REPEAT liefern die erwarteten Ergebnisse; EXIT und CONTINUE wirken.
+      - id: return
+        kind: effekt
+        text: RETURN beendet den Zyklus; folgende Anweisungen werden nicht ausgeführt.
+    evidence:
+      - { kind: unit, file: tests/test_st_language.py, test: test_if_elsif_else, covers: [verzweigungen] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_case_with_ranges_and_lists, covers: [verzweigungen] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_loops, covers: [schleifen] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_return_ends_scan, covers: [return] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.datentypen
+    title: Datentypen wie auf der SPS
+    group: programmierung.sprache
+    summary: 16 elementare Datentypen mit SPS-typischem Überlauf, REAL in 32 Bit und allen gängigen Literalformen.
+    usage:
+      - channel: entwicklung
+        text: "Deklaration z. B. `Drehzahl : INT := 100;`, Literale wie `16#FF`, `2#1010`, `INT#5`, `T#1m30s`."
+    rules:
+      - Ganzzahlen laufen wie auf der Steuerung über (32767 + 1 = −32768).
+      - REAL wird auf 32-Bit-Genauigkeit gerundet.
+    technical:
+      components: [src/vplc/types.py, src/vplc/st/lexer.py, src/vplc/st/compiler.py]
+    acceptance:
+      - id: ueberlauf
+        kind: regel
+        text: INT, BYTE und UINT laufen an ihren Grenzen über.
+      - id: real-32bit
+        kind: regel
+        text: REAL hat 32-Bit-Genauigkeit, LREAL 64 Bit.
+      - id: literale
+        kind: effekt
+        text: Hexadezimal-, Binär-, typisierte, Zeit- und Exponent-Literale ergeben die erwarteten Werte.
+    evidence:
+      - { kind: unit, file: tests/test_st_language.py, test: test_integer_overflow_wraps_like_a_plc, covers: [ueberlauf] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_real_is_float32, covers: [real-32bit] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_literals, covers: [literale] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.ausdruecke
+    title: Ausdrücke und Operatoren
+    group: programmierung.sprache
+    summary: Arithmetik, Vergleiche, logische und bitweise Verknüpfungen mit IEC-Vorrangregeln; Namen ohne Rücksicht auf Groß-/Kleinschreibung.
+    usage:
+      - channel: entwicklung
+        text: "Operatoren `+ - * / MOD **`, `= <> < > <= >=`, `AND & OR XOR NOT`; Kommentare `(* … *)` und `//`."
+    technical:
+      components: [src/vplc/st/parser.py, src/vplc/st/compiler.py]
+    acceptance:
+      - id: vorrang
+        kind: effekt
+        text: Punkt- vor Strichrechnung, Klammern, ganzzahlige Division und MOD rechnen wie auf der SPS.
+      - id: logik-bitweise
+        kind: effekt
+        text: AND/OR/XOR/NOT wirken auf BOOL logisch und auf WORD bitweise.
+      - id: schreibweise
+        kind: effekt
+        text: Variablennamen sind unabhängig von Groß-/Kleinschreibung; Kommentare werden ignoriert.
+    evidence:
+      - { kind: unit, file: tests/test_st_language.py, test: test_arithmetic_and_precedence, covers: [vorrang] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_boolean_and_bitwise_logic, covers: [logik-bitweise] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_case_insensitive_identifiers_and_comments, covers: [schreibweise] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.variablenbereiche
+    title: Variablenbereiche und Konstanten
+    group: programmierung.sprache
+    summary: VAR, VAR_INPUT, VAR_OUTPUT, VAR_TEMP und Konstanten, die andere Konstanten nutzen dürfen.
+    usage:
+      - channel: entwicklung
+        text: "`VAR CONSTANT MAX : INT := 10; END_VAR`; `VAR_TEMP` wird in jedem Zyklus neu initialisiert."
+    technical:
+      components: [src/vplc/st/compiler.py]
+    acceptance:
+      - id: temp-und-var
+        kind: effekt
+        text: VAR_TEMP beginnt jeden Zyklus mit dem Initialwert, VAR behält seinen Wert über Zyklen.
+      - id: konstanten-ausdruecke
+        kind: effekt
+        text: Initialwerte dürfen aus zuvor deklarierten Konstanten berechnet werden.
+    evidence:
+      - { kind: unit, file: tests/test_st_language.py, test: test_var_temp_is_reset_each_scan_and_var_keeps_value, covers: [temp-und-var] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_constants_in_initialisers, covers: [konstanten-ausdruecke] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.timer
+    title: Zeitglieder TON, TOF, TP
+    group: programmierung.bibliothek
+    summary: Einschalt-, Ausschaltverzögerung und Impuls nach IEC 61131-3.
+    usage:
+      - channel: entwicklung
+        text: "`t(IN := Start, PT := T#5s); IF t.Q THEN …`"
+    technical:
+      components: [src/vplc/st/stdlib.py]
+    acceptance:
+      - id: ton
+        kind: effekt
+        text: TON setzt Q genau nach Ablauf von PT und meldet die abgelaufene Zeit ET; ohne IN wird zurückgesetzt.
+      - id: tof
+        kind: effekt
+        text: TOF hält Q nach dem Abschalten von IN noch für PT.
+      - id: tp
+        kind: effekt
+        text: TP erzeugt einen Impuls der Länge PT, auch wenn IN vorher abfällt.
+    evidence:
+      - { kind: unit, file: tests/test_function_blocks.py, test: test_ton, covers: [ton] }
+      - { kind: unit, file: tests/test_function_blocks.py, test: test_tof, covers: [tof] }
+      - { kind: unit, file: tests/test_function_blocks.py, test: test_tp, covers: [tp] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.zaehler-flanken
+    title: Zähler, Flanken und Speicherglieder
+    group: programmierung.bibliothek
+    summary: CTU, CTD, R_TRIG, F_TRIG, SR und RS.
+    usage:
+      - channel: entwicklung
+        text: "`c(CU := Teil.Q, R := Quittieren, PV := 10);`"
+    technical:
+      components: [src/vplc/st/stdlib.py]
+      notes: [Der kombinierte Zähler CTUD steht im Prüfbestand.]
+    acceptance:
+      - id: flanken
+        kind: effekt
+        text: R_TRIG meldet nur die steigende, F_TRIG nur die fallende Flanke.
+      - id: zaehler
+        kind: effekt
+        text: CTU zählt steigende Flanken bis PV und wird mit R zurückgesetzt; CTD zählt vom geladenen PV abwärts.
+      - id: speicher
+        kind: effekt
+        text: Bei gleichzeitigem Setzen und Rücksetzen dominiert bei SR das Setzen, bei RS das Rücksetzen.
+    evidence:
+      - { kind: unit, file: tests/test_function_blocks.py, test: test_edges, covers: [flanken] }
+      - { kind: unit, file: tests/test_function_blocks.py, test: test_ctu_and_reset, covers: [zaehler] }
+      - { kind: unit, file: tests/test_function_blocks.py, test: test_ctd, covers: [zaehler] }
+      - { kind: unit, file: tests/test_function_blocks.py, test: test_sr_rs, covers: [speicher] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.funktionen
+    title: Standardfunktionen und Typumwandlungen
+    group: programmierung.bibliothek
+    summary: MIN, MAX, LIMIT, SEL, ABS, SQRT und weitere Funktionen sowie alle *_TO_*-Umwandlungen.
+    usage:
+      - channel: entwicklung
+        text: "`Ist := LIMIT(0, Soll, 100); r := INT_TO_REAL(i);`"
+    rules:
+      - REAL_TO_INT rundet kaufmännisch statt abzuschneiden.
+    technical:
+      components: [src/vplc/st/stdlib.py]
+    acceptance:
+      - id: funktionen
+        kind: effekt
+        text: MAX, LIMIT, SQRT, SEL, ABS und TO_DINT liefern die erwarteten Werte.
+      - id: runden
+        kind: regel
+        text: REAL_TO_INT rundet 2,5 auf 2 und −2,6 auf −3.
+    evidence:
+      - { kind: unit, file: tests/test_st_language.py, test: test_functions_and_conversions, covers: [funktionen, runden] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.programm-pruefen
+    title: Programm prüfen
+    group: programmierung.pruefung
+    summary: Prüft Structured Text vor dem Laden und meldet alle Fehler mit Zeile und Spalte – im Browser, per API oder in der CI.
+    usage:
+      - channel: api
+        text: "`POST /api/check` mit `source` → `{ok, errors[]}`."
+      - channel: cli
+        text: "`vplc check programm.st` – Rückgabewert 1 bei Fehlern, Ausgabe `datei:zeile:spalte: Meldung`."
+    technical:
+      components: [src/vplc/st/compiler.py, src/vplc/st/parser.py, src/vplc/__main__.py, src/vplc/manager/api.py]
+      endpoints: ["POST /api/check"]
+      commands: [vplc check]
+    acceptance:
+      - id: position
+        kind: effekt
+        text: Ein Syntaxfehler wird mit der richtigen Zeile gemeldet.
+      - id: alle-fehler
+        kind: effekt
+        text: Mehrere semantische Fehler (unbekannte Variable, Typ, Funktion, Konstante beschrieben …) werden gemeinsam und nach Zeile sortiert gemeldet.
+      - id: cli
+        kind: effekt
+        text: "`vplc check` meldet für eine fehlerhafte Datei `datei:3:1: Unbekannte Variable` und endet mit 1, für eine fehlerfreie mit 0."
+      - id: api
+        kind: effekt
+        text: Über die API geprüfte Beispielprogramme gelten als fehlerfrei.
+    evidence:
+      - { kind: unit, file: tests/test_st_language.py, test: test_syntax_error_has_position, covers: [position] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_semantic_errors_are_collected, covers: [alle-fehler] }
+      - { kind: integration, file: tests/test_operation_api.py, test: test_cli_check_reports_errors_with_line_and_column, covers: [cli] }
+      - { kind: integration, file: tests/test_api.py, test: test_check_endpoint_and_examples, covers: [api] }
+    comparisons: { themenliste: industrial-devops }
+
+  - id: programmierung.beispiele
+    title: Beispielprogramme
+    group: programmierung.pruefung
+    summary: Liefert mitgelieferte Beispielprogramme (Ampel, Tank, Förderband) zum Laden in eine vPLC.
+    usage:
+      - channel: api
+        text: "`GET /api/info` listet Beispiele und Funktionsbausteine, `GET /api/examples/{name}` liefert den Quelltext."
+    rules:
+      - "Pfadangaben außerhalb des Beispielordners werden mit `404` abgelehnt."
+    technical:
+      components: [src/vplc/manager/api.py]
+      endpoints: ["GET /api/info", "GET /api/examples/{name}"]
+      notes: [Beispiele unter `examples/*.st`; Ordner über `VPLC_EXAMPLES` änderbar.]
+    acceptance:
+      - id: beispiele-geliefert
+        kind: effekt
+        text: Die Beispiele ampel, tank und foerderband werden aufgelistet und als Quelltext geliefert.
+      - id: kein-ausbruch
+        kind: regel
+        text: Ein Pfad außerhalb des Beispielordners wird abgelehnt.
+        code: "404"
+    evidence:
+      - { kind: integration, file: tests/test_api.py, test: test_check_endpoint_and_examples, covers: [beispiele-geliefert, kein-ausbruch] }
+    comparisons: { themenliste: vplc }

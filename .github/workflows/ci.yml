@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: node-red/package-lock.json
+      - run: pip install -e ".[dev]"
+      - run: npm ci
+        working-directory: node-red
+
+      # Testberichte als Nachweise für den Feature-Katalog
+      - name: vPLC-Tests
+        run: pytest --junitxml=reports/pytest-junit.xml
+      - name: Node-RED-Tests
+        run: npm run test:junit
+        working-directory: node-red
+      - name: Tests des Katalog-Werkzeugs
+        run: pytest tools/feature_catalog/tests --junitxml=reports/catalog-junit.xml
+
+      - name: Feature-Katalog prüfen
+        run: python -m feature_catalog check --reports reports
+        env:
+          PYTHONPATH: tools
+      - name: Feature-Katalog-Ansicht erzeugen
+        if: always()
+        run: python -m feature_catalog build --reports reports
+        env:
+          PYTHONPATH: tools
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feature-katalog
+          path: |
+            catalog/dist
+            reports

@@ -1,0 +1,64 @@
+area: audit
+features:
+  - id: audit.protokoll
+    title: Audit-Log
+    group: audit.protokoll
+    summary: Protokolliert jede Änderung – Anlegen, Löschen, Programm-Downloads, Aktivierungen, RUN/STOP, Schreibzugriffe – mit Benutzer und Zeitpunkt.
+    usage:
+      - channel: api
+        text: "`GET /api/audit?plc_id=<id oder Name>&limit=200`; Benutzer aus dem Header `X-User`."
+      - channel: node-red
+        text: Schreibzugriffe aus Node-RED erscheinen mit dem im Konfigurations-Node eingetragenen Benutzer.
+    rules:
+      - Das Protokoll wird nur angehängt, nie geändert (JSON Lines).
+    technical:
+      components: [src/vplc/manager/store.py, src/vplc/manager/service.py]
+      endpoints: ["GET /api/audit"]
+      notes: [Ohne API-Token ist der Benutzername nicht authentifiziert.]
+    acceptance:
+      - id: aktionen
+        kind: effekt
+        text: Anlegen, Download, Aktivieren, RUN und Schreibzugriffe erscheinen neueste zuerst im Protokoll der vPLC.
+      - id: benutzer
+        kind: effekt
+        text: Ein Eintrag nennt den aufrufenden Benutzer und die ID der vPLC, auch wenn per Name aufgerufen wurde.
+      - id: loeschen
+        kind: effekt
+        text: Das Löschen einer vPLC wird protokolliert.
+    evidence:
+      - { kind: integration, file: tests/test_api.py, test: test_full_lifecycle, covers: [aktionen] }
+      - { kind: integration, file: tests/test_stream_api.py, test: test_name_lookup_and_bulk_write, covers: [benutzer] }
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: vplc out writes a single variable and vplc in reports the change, covers: [benutzer] }
+      - { kind: integration, file: tests/test_operation_api.py, test: test_deletes_plc_together_with_its_versions, covers: [loeschen] }
+    comparisons: { themenliste: ot-security }
+
+  - id: audit.api-token
+    title: Zugangsschutz per API-Token
+    group: audit.zugang
+    summary: Ist ein Token gesetzt, verlangt die API es bei jedem Aufruf; der Healthcheck bleibt frei.
+    usage:
+      - channel: api
+        text: "Umgebungsvariable `VPLC_API_TOKEN`; Aufrufe mit `Authorization: Bearer <token>`."
+      - channel: node-red
+        text: Token im Konfigurations-Node oder aus `VPLC_API_TOKEN`.
+    rules:
+      - "Fehlendes oder falsches Token wird mit `401` abgelehnt."
+    technical:
+      components: [src/vplc/manager/api.py, node-red/nodes/lib/client.js]
+      nodes: [vplc-server]
+      notes: [Vergleich zeitkonstant (`hmac.compare_digest`).]
+    acceptance:
+      - id: abgelehnt
+        kind: regel
+        text: Ohne oder mit falschem Token wird ein Aufruf abgelehnt.
+        code: "401"
+      - id: zugelassen
+        kind: effekt
+        text: Mit gültigem Token ist die API nutzbar; der Healthcheck braucht keins.
+      - id: node-red-token
+        kind: effekt
+        text: Ein falsches Token im Node-RED-Konfigurations-Node führt zu einer roten Statusanzeige statt zu einem Absturz.
+    evidence:
+      - { kind: integration, file: tests/test_api.py, test: test_token_auth, covers: [abgelehnt, zugelassen] }
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: shows a disconnected status for a wrong token instead of crashing, covers: [node-red-token] }
+    comparisons: { themenliste: ot-security }

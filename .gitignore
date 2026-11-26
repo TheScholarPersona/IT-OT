@@ -8,3 +8,5 @@ dist/
 /data/
 node_modules/
 *.tgz
+reports/
+catalog/dist/

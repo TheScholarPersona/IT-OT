@@ -1,0 +1,42 @@
+area: opcua
+features:
+  - id: opcua.variablen
+    title: Variablen über OPC UA lesen und schreiben
+    group: opcua.server
+    summary: Jede Variable ist ein OPC-UA-Knoten; Clients lesen und schreiben sie wie bei einer realen Steuerung.
+    usage:
+      - channel: opcua
+        text: "Endpoint `opc.tcp://<host>:4840/vplc/`, Knoten `ns=2;s=<Variable>`, Security None."
+    rules:
+      - Konstanten sind schreibgeschützt; Schreibversuche lehnt der Server ab.
+    technical:
+      components: [src/vplc/io/opcua.py, src/vplc/runtime.py]
+      notes: [Server auf Basis von asyncua; Abgleich im Intervall `io_sync_ms` (Standard 50 ms).]
+    acceptance:
+      - id: schreiben-wirkt
+        kind: effekt
+        text: Per OPC UA gesetzte Werte wirken auf das Programm; berechnete Werte sind per OPC UA lesbar.
+      - id: konstante-geschuetzt
+        kind: regel
+        text: Der Schreibversuch auf eine Konstante wird mit einem OPC-UA-Statusfehler abgelehnt.
+        code: UaStatusCodeError
+    evidence:
+      - { kind: integration, file: tests/test_runtime_protocols.py, test: test_opcua_read_write, covers: [schreiben-wirkt, konstante-geschuetzt] }
+    comparisons: { themenliste: vplc }
+
+  - id: opcua.status-knoten
+    title: Betriebszustand über OPC UA
+    group: opcua.server
+    summary: Statusknoten melden Betriebszustand, Zykluszähler und geladenes Programm.
+    usage:
+      - channel: opcua
+        text: "`ns=2;s=_Status.Mode`, `_Status.ScanCount`, `_Status.Program`."
+    technical:
+      components: [src/vplc/io/opcua.py, src/vplc/runtime.py]
+    acceptance:
+      - id: mode
+        kind: effekt
+        text: Im RUN meldet `_Status.Mode` den Wert RUN, `_Status.Program` Programm und Version, `_Status.ScanCount` einen steigenden Zähler.
+    evidence:
+      - { kind: integration, file: tests/test_runtime_protocols.py, test: test_opcua_read_write, covers: [mode] }
+    comparisons: { themenliste: telemetrie }

@@ -96,9 +96,12 @@ vplc check examples/ampel.st     # Syntax- und Semantikprüfung, z. B. für CI-P
 ## Entwicklung
 
 ```bash
-pytest                      # 43 Tests: Sprache, Funktionsbausteine, S7-Layout, S7/OPC-UA-End-to-End, REST-API, Stream
-cd node-red && npm install && npm test    # 6 Tests: Node-RED-Nodes gegen echten Manager
+pytest                      # 54 Tests: Sprache, Funktionsbausteine, S7-Layout, S7/OPC-UA-End-to-End, REST-API, Stream, CLI
+cd node-red && npm install && npm test    # 7 Tests: Node-RED-Nodes gegen echten Manager
 ```
+
+Was die vPLC nachweislich kann, zeigt der geprüfte [Feature-Katalog](docs/feature-katalog.md)
+(45 Features, jedes per bestandenem Test belegt; Ansicht als CI-Artefakt).
 
 Aufbau und Designentscheidungen: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) ·
 Weitere Ausbaustufen: [docs/ROADMAP.md](docs/ROADMAP.md)

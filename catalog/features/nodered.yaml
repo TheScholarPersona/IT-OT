@@ -1,0 +1,93 @@
+area: nodered
+features:
+  - id: nodered.werte-beobachten
+    title: Werte in Node-RED beobachten
+    group: nodered.nodes
+    summary: Der Node `vplc in` meldet Variablenänderungen sofort als Nachrichten – je Variable oder als Objekt.
+    usage:
+      - channel: node-red
+        text: "Node `vplc in`: vPLC, Variablen (leer = alle), Ausgabe „je Variable“, „Änderungen als Objekt“ oder „alle Werte“."
+    dependsOn: [prozessdaten.live-stream]
+    technical:
+      components: [node-red/nodes/vplc.js, node-red/nodes/lib/client.js]
+      nodes: [vplc in, vplc-server]
+      notes: [Automatische Wiederverbindung mit wachsendem Abstand (1–30 s).]
+    acceptance:
+      - id: je-variable
+        kind: effekt
+        text: Nach dem Verbinden kommen die aktuellen Werte, danach jede Änderung als eigene Nachricht mit Variablenname, vPLC und Betriebszustand.
+      - id: alle-werte
+        kind: effekt
+        text: Mit der Ausgabe „alle Werte“ enthält die Nachricht ein Objekt mit allen Variablen.
+    evidence:
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: vplc out writes a single variable and vplc in reports the change, covers: [je-variable] }
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: "vplc in with output 'all' sends the full value object", covers: [alle-werte] }
+    comparisons: { themenliste: telemetrie }
+
+  - id: nodered.werte-schreiben
+    title: Werte aus Node-RED schreiben
+    group: nodered.nodes
+    summary: Der Node `vplc out` schreibt eine Variable oder mehrere auf einmal; Fehler gehen an den catch-Node.
+    usage:
+      - channel: node-red
+        text: "Node `vplc out`: `msg.topic` = Variable, `msg.payload` = Wert – oder `msg.payload = {Name: Wert}`."
+    dependsOn: [prozessdaten.mehrere-schreiben]
+    technical:
+      components: [node-red/nodes/vplc.js, node-red/nodes/lib/client.js]
+      nodes: [vplc out, vplc-server]
+    acceptance:
+      - id: einzeln
+        kind: effekt
+        text: Per `msg.topic` geschriebene Werte wirken auf das Programm und sind als Änderung sichtbar.
+      - id: objekt-atomar
+        kind: effekt
+        text: Ein Objekt mit mehreren Variablen wird geschrieben; enthält es eine unbekannte Variable, wird nichts geschrieben und der Fehler an catch gemeldet.
+    evidence:
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: vplc out writes a single variable and vplc in reports the change, covers: [einzeln] }
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: vplc out writes an object atomically and reports errors to catch, covers: [objekt-atomar] }
+    comparisons: { themenliste: vplc }
+
+  - id: nodered.steuern
+    title: vPLC aus Node-RED steuern
+    group: nodered.nodes
+    summary: Der Node `vplc control` schaltet RUN/STOP, liest Variablen, lädt Programme und listet Versionen.
+    usage:
+      - channel: node-red
+        text: "Node `vplc control` mit fester Aktion oder `msg.action`; Programm in `msg.payload`, Kommentar in `msg.comment`."
+    dependsOn: [betrieb.run-stop, programme.programm-laden]
+    technical:
+      components: [node-red/nodes/vplc.js, node-red/nodes/lib/client.js]
+      nodes: [vplc control, vplc-server]
+    acceptance:
+      - id: aktionen
+        kind: effekt
+        text: STOP, RUN, Variablen lesen, Programm laden und Versionen auflisten liefern jeweils das Ergebnis in `msg.payload`.
+      - id: compilerfehler
+        kind: effekt
+        text: Ein fehlerhaftes Programm wird an catch gemeldet; `msg.errors` nennt die Zeile.
+    evidence:
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: "vplc control: stop, run, read, download with compile errors, versions", covers: [aktionen, compilerfehler] }
+    comparisons: { themenliste: industrial-devops }
+
+  - id: nodered.vplc-auswahl
+    title: vPLC im Editor auswählen
+    group: nodered.nodes
+    summary: Im Node-RED-Editor listet eine Suche die vPLCs des konfigurierten Managers zur Auswahl auf.
+    usage:
+      - channel: node-red
+        text: Lupe neben dem Feld „vPLC“ in allen vPLC-Nodes.
+    technical:
+      components: [node-red/nodes/vplc.js, node-red/nodes/vplc.html]
+      nodes: [vplc-server]
+      endpoints: ["GET /vplc/plcs/{server}"]
+    acceptance:
+      - id: liste
+        kind: effekt
+        text: Die Liste nennt je vPLC ID, Name, Betriebszustand und Programm.
+      - id: unbekannter-manager
+        kind: regel
+        text: Für einen nicht bereitgestellten Konfigurations-Node wird die Liste abgelehnt.
+        code: "404"
+    evidence:
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: lists the PLCs of the configured manager for the editor picker, covers: [liste, unbekannter-manager] }
+    comparisons: { themenliste: vplc }

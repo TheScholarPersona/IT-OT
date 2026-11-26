@@ -1,0 +1,141 @@
+schemaVersion: 1
+title: IT-OT vPLC – Feature-Katalog
+
+sources:
+  routes: catalog/discovered/routes.json        # geschrieben von tests/test_catalog_export.py
+  cliModules: [src/vplc/__main__.py]
+  cliName: vplc
+  nodeRedFiles: [node-red/nodes/vplc.js]
+  testDirs: [tests, node-red/test]
+
+areas:
+  - id: betrieb
+    title: vPLC-Betrieb
+    summary: Virtuelle Steuerungen anlegen, starten, stoppen und überwachen.
+    status: katalogisiert
+    owns:
+      endpoints: ["/api/plcs"]
+      commands: ["vplc serve"]
+    groups:
+      - id: betrieb.instanzen
+        title: Instanzen
+        summary: vPLCs anlegen, löschen und nach einem Neustart wiederherstellen.
+      - id: betrieb.zyklus
+        title: Zyklus und Betriebszustand
+        summary: Zyklische Programmbearbeitung, RUN/STOP, Kaltstart und Fehlerverhalten.
+
+  - id: programmierung
+    title: Programmierung
+    summary: Steuerungsprogramme in Structured Text (IEC 61131-3) schreiben und prüfen.
+    status: katalogisiert
+    owns:
+      endpoints: ["/api/check", "/api/examples", "/api/info"]
+      commands: ["vplc check"]
+    groups:
+      - id: programmierung.sprache
+        title: Sprache und Datentypen
+      - id: programmierung.bibliothek
+        title: Standardbibliothek
+      - id: programmierung.pruefung
+        title: Prüfung und Beispiele
+
+  - id: programme
+    title: Programme und Versionen
+    summary: Programme in eine vPLC laden und jede Änderung als Version nachvollziehen.
+    status: katalogisiert
+    owns:
+      endpoints:
+        - "/api/plcs/{plc_id}/program"
+        - "/api/plcs/{plc_id}/versions"
+        - "/api/plcs/{plc_id}/diff"
+    groups:
+      - id: programme.laden
+        title: Programm laden
+        summary: Quelltext prüfen, übernehmen und den aktiven Stand abrufen.
+      - id: programme.versionen
+        title: Versionen und Rücksprung
+        summary: Frühere Stände ansehen, vergleichen und wieder aktivieren.
+
+  - id: prozessdaten
+    title: Prozessdaten
+    summary: Variablen einer laufenden vPLC lesen, schreiben und live verfolgen.
+    status: katalogisiert
+    owns:
+      endpoints: ["/api/plcs/{plc_id}/variables", "/api/plcs/{plc_id}/stream"]
+    groups:
+      - id: prozessdaten.variablen
+        title: Variablen lesen und schreiben
+      - id: prozessdaten.live
+        title: Live-Daten
+
+  - id: s7
+    title: S7-Schnittstelle
+    summary: Zugriff über S7comm wie auf eine Siemens-Steuerung.
+    status: katalogisiert
+    owns:
+      endpoints: ["/api/plcs/{plc_id}/s7-layout"]
+    groups:
+      - id: s7.datenbaustein
+        title: Datenbaustein
+
+  - id: opcua
+    title: OPC-UA-Schnittstelle
+    summary: Zugriff über OPC UA für SCADA, MES und Historian.
+    status: katalogisiert
+    groups:
+      - id: opcua.server
+        title: OPC-UA-Server
+
+  - id: audit
+    title: Audit und Zugriff
+    summary: Nachvollziehen, wer was geändert hat, und den Zugang schützen.
+    status: katalogisiert
+    owns:
+      endpoints: ["/api/audit"]
+    groups:
+      - id: audit.protokoll
+        title: Audit-Log
+      - id: audit.zugang
+        title: Zugangsschutz
+
+  - id: web
+    title: Weboberfläche
+    summary: Bedienung aller Funktionen im Browser.
+    status: katalogisiert
+    owns:
+      uiRoutes: ["/", "/static"]
+    groups:
+      - id: web.bedienung
+        title: Bedienung
+
+  - id: nodered
+    title: Node-RED
+    summary: vPLCs in Node-RED-Flows beobachten, beschreiben und steuern.
+    status: katalogisiert
+    owns:
+      nodes: ["vplc in", "vplc out", "vplc control", "vplc-server"]
+      endpoints: ["/vplc/plcs"]
+    groups:
+      - id: nodered.nodes
+        title: vPLC-Nodes
+
+  - id: katalog
+    title: Feature-Katalog
+    summary: Dieser Katalog – geprüft gegen Code und Testergebnisse.
+    status: katalogisiert
+    groups:
+      - id: katalog.werkzeug
+        title: Werkzeug
+
+exclusions:
+  endpoints:
+    - { item: "GET /api/health", reason: "Betriebsendpunkt für Container-Healthchecks, kein Feature" }
+    - { item: "GET /openapi.json", reason: "von FastAPI erzeugte API-Beschreibung" }
+    - { item: "GET /docs", reason: "von FastAPI erzeugte API-Dokumentation (Swagger UI)" }
+    - { item: "GET /docs/oauth2-redirect", reason: "Hilfsseite der Swagger UI" }
+    - { item: "GET /redoc", reason: "von FastAPI erzeugte API-Dokumentation (ReDoc)" }
+
+comparisons:
+  - id: themenliste
+    title: Themenliste (Anforderung)
+    complete: true

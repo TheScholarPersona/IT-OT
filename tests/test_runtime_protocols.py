@@ -84,6 +84,8 @@ async def test_opcua_read_write(plc):
     async with Client(f"opc.tcp://127.0.0.1:{plc.config.opcua_port}/vplc/") as client:
         ns = await client.get_namespace_index("urn:it-ot:vplc")
         assert await client.get_node(f"ns={ns};s=_Status.Mode").read_value() == RUN
+        assert await client.get_node(f"ns={ns};s=_Status.Program").read_value() == "Demo v1"
+        assert await client.get_node(f"ns={ns};s=_Status.ScanCount").read_value() > 0
         await client.get_node(f"ns={ns};s=Sollwert").write_value(ua.Variant(30, ua.VariantType.Int16))
         await client.get_node(f"ns={ns};s=Start").write_value(True)
 

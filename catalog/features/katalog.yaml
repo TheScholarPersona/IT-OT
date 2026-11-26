@@ -1,0 +1,156 @@
+area: katalog
+features:
+  - id: katalog.datenmodell
+    title: Katalog als geprüftes YAML
+    group: katalog.werkzeug
+    summary: Bereiche, Features, Prüfbestand und Vergleiche liegen als YAML unter `catalog/` – mit strengem Schema.
+    usage:
+      - channel: entwicklung
+        text: "Features in `catalog/features/<bereich>.yaml`, Prüfbestand in `catalog/review.yaml`."
+    rules:
+      - Unbekannte Felder und ungültige Werte (z. B. ein unbekannter Bedienweg) sind Fehler.
+    technical:
+      components: [tools/feature_catalog/schema.py, tools/feature_catalog/loader.py]
+    acceptance:
+      - id: schema-streng
+        kind: regel
+        text: Ein unbekanntes Feld und ein ungültiger Bedienweg werden als Schemafehler gemeldet.
+      - id: echter-katalog
+        kind: effekt
+        text: Der Katalog dieses Repositories besteht die Prüfung ohne Fehler.
+    evidence:
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_rejects_unknown_fields_and_invalid_values, covers: [schema-streng] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_real_catalog_has_no_errors, covers: [echter-katalog] }
+    comparisons: { themenliste: ohne-bezug }
+
+  - id: katalog.abgleich-code
+    title: Abgleich mit dem Code
+    group: katalog.werkzeug
+    summary: Erkennt Endpunkte, CLI-Befehle und Node-RED-Nodes und meldet, was keinem Feature oder Bereich zugeordnet ist oder nicht mehr existiert.
+    description: |
+      Endpunkte stammen aus einer Exportdatei, die ein Test aus der laufenden App schreibt; die Applikation
+      selbst wird dafür nicht verändert. Die Prüfung legt nie selbst Features an.
+    usage:
+      - channel: entwicklung
+        text: "`python -m feature_catalog check`; Export erneuern mit `UPDATE_SNAPSHOTS=1 pytest tests/test_catalog_export.py`."
+    rules:
+      - Ein Präfix gilt nur für ganze Pfadsegmente.
+    technical:
+      components: [tools/feature_catalog/discover.py, tools/feature_catalog/analysis.py]
+    acceptance:
+      - id: unzugeordnet
+        kind: effekt
+        text: Ein erkannter Endpunkt ohne Feature wird gemeldet, ohne dass Katalogdateien verändert oder Features angelegt werden.
+      - id: ohne-bereich
+        kind: effekt
+        text: Ein Endpunkt, den kein Bereich beansprucht, wird gemeldet; im echten Katalog hat jeder Bestandteil einen Bereich.
+      - id: entferntes
+        kind: effekt
+        text: Verweise auf entfernte Endpunkte, Quelldateien, Tests und Abhängigkeiten werden gemeldet.
+      - id: praefix
+        kind: regel
+        text: "`/v1/orders` passt auf `/v1/orders/…`, nicht auf `/v1/orders-export`."
+    evidence:
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_reports_unassigned_components_but_never_creates_features, covers: [unzugeordnet] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_reports_unowned_components, covers: [ohne-bereich] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_assigns_every_discovered_component_to_an_area, covers: [ohne-bereich] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_reports_references_to_removed_items, covers: [entferntes] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_prefix_matches_whole_segments_only, covers: [praefix] }
+    comparisons: { themenliste: ohne-bezug }
+
+  - id: katalog.nachweise-testlauf
+    title: Nachweise im Testlauf
+    group: katalog.werkzeug
+    summary: Liest JUnit-Berichte von pytest und mocha und verlangt für jedes Akzeptanzkriterium einen bestandenen Nachweis.
+    usage:
+      - channel: entwicklung
+        text: "`python -m feature_catalog check --reports reports`."
+    rules:
+      - Übersprungene, fehlgeschlagene und nicht gelaufene Tests zählen nie als Nachweis.
+    technical:
+      components: [tools/feature_catalog/junit.py, tools/feature_catalog/analysis.py]
+    acceptance:
+      - id: pflicht
+        kind: effekt
+        text: Ein Feature ohne Nachweis oder ohne Kriterium der Art effekt wird gemeldet.
+      - id: jedes-kriterium
+        kind: effekt
+        text: Ein Kriterium ohne bestandenen Nachweis und ein Nachweis ohne `covers` werden gemeldet.
+      - id: ergebnisse
+        kind: regel
+        text: Fehlgeschlagene, übersprungene und fehlende Tests werden gekennzeichnet; das Feature gilt dann als teilweise nachgewiesen.
+      - id: mocha
+        kind: effekt
+        text: Ergebnisse aus mocha-Berichten werden über Datei und Testtitel zugeordnet.
+    evidence:
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_requires_evidence_and_an_effect_criterion, covers: [pflicht] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_requires_a_passed_evidence_for_every_criterion, covers: [jedes-kriterium] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_flags_failed_skipped_and_missing_evidence, covers: [ergebnisse] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_reads_mocha_reports_by_file_and_title, covers: [mocha] }
+    comparisons: { themenliste: ohne-bezug }
+
+  - id: katalog.nachweis-qualitaet
+    title: Qualität der Nachweise
+    group: katalog.werkzeug
+    summary: Prüft statisch, ob ein Nachweis etwas zusichert, mehr als den Status prüft, das Feature berührt und den Fehlercode einer Regel enthält.
+    usage:
+      - channel: entwicklung
+        text: "Teil von `check`; `python -m feature_catalog review` listet je Nachweis Kriterium → Aktion → Zusicherung."
+    rules:
+      - Jede Regel mit Fehlercode braucht ein Kriterium der Art regel, und ein abdeckender Test muss den Code enthalten.
+    technical:
+      components: [tools/feature_catalog/testbody.py, tools/feature_catalog/discover.py, tools/feature_catalog/analysis.py]
+    acceptance:
+      - id: zusicherung-bezug
+        kind: effekt
+        text: Tests ohne Zusicherung, mit reiner Statusprüfung oder ohne Bezug zum Feature werden gemeldet, ein guter Test nicht.
+      - id: fehlercode
+        kind: regel
+        text: Eine Regel mit Fehlercode ohne passendes Kriterium und ein Kriterium, dessen Code kein Test zusichert, werden gemeldet.
+      - id: aufrufe
+        kind: effekt
+        text: Endpunktaufrufe mit Methode werden erkannt, reine Pfadlisten nicht; ungetestete Endpunkte erzeugen eine Warnung.
+    evidence:
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_detects_evidence_without_assertion_status_only_or_unrelated, covers: [zusicherung-bezug] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_requires_the_rule_code_as_assertion, covers: [fehlercode] }
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_detects_calls_with_method_but_not_plain_path_lists, covers: [aufrufe] }
+    comparisons: { themenliste: ohne-bezug }
+
+  - id: katalog.ansicht
+    title: Ansicht im Browser
+    group: katalog.werkzeug
+    summary: Eine eigenständige HTML-Datei mit Kennzahlen, Navigation, Suche, Filtern und aufklappbaren technischen Details, dazu catalog.json.
+    usage:
+      - channel: entwicklung
+        text: "`python -m feature_catalog build --reports reports` → `catalog/dist/index.html`; in der CI als Artefakt."
+    technical:
+      components: [tools/feature_catalog/view.py, tools/feature_catalog/template.html]
+    acceptance:
+      - id: eigenstaendig
+        kind: effekt
+        text: Die Ansicht lädt keine externen Skripte, enthält die Daten eingebettet und führt Katalog und Prüfbestand getrennt.
+    evidence:
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_builds_a_standalone_view, covers: [eigenstaendig] }
+    comparisons: { themenliste: ohne-bezug }
+
+  - id: katalog.vergleich
+    title: Vergleich mit der Themenliste
+    group: katalog.werkzeug
+    summary: Ordnet jedes Feature einem Thema der Anforderung zu und zeigt je Thema Stand und Lücken.
+    usage:
+      - channel: entwicklung
+        text: "`catalog/comparisons/themenliste.yaml`; in der Ansicht Registerkarte „Vergleich“."
+    rules:
+      - Bei einem vollständigen Vergleich braucht jedes Feature eine Einstufung.
+    technical:
+      components: [tools/feature_catalog/analysis.py, tools/feature_catalog/view.py]
+    acceptance:
+      - id: einstufung-pflicht
+        kind: regel
+        text: Ein Feature ohne Einstufung oder mit unbekanntem Thema wird gemeldet.
+      - id: zuordnung
+        kind: effekt
+        text: Das Thema listet die ihm zugeordneten Features.
+    evidence:
+      - { kind: unit, file: tools/feature_catalog/tests/test_feature_catalog.py, test: test_requires_classification_for_a_complete_comparison, covers: [einstufung-pflicht, zuordnung] }
+    comparisons: { themenliste: ohne-bezug }

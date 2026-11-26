@@ -1,0 +1,212 @@
+area: programme
+features:
+  - id: programme.programm-laden
+    title: Programm in eine vPLC laden
+    group: programme.laden
+    summary: Übernimmt ein Structured-Text-Programm in eine vPLC und speichert es als neue Version.
+    description: |
+      Der Quelltext wird vor der Übernahme vollständig geprüft. Ist er fehlerfrei, läuft die vPLC
+      ab dem nächsten Zyklus mit dem neuen Programm. Jede Übernahme wird mit Autor, Zeitpunkt und
+      Kommentar als Version abgelegt. Läuft die vPLC gerade, bleibt sie in RUN, und Variablen mit
+      gleichem Namen und Typ behalten ihre Werte (Warmstart).
+    usage:
+      - channel: api
+        text: "`PUT /api/plcs/{plc}/program` mit `source` und `comment`; Autor aus dem Header `X-User`."
+      - channel: node-red
+        text: "Node `vplc control`, Aktion „Programm laden“, Quelltext in `msg.payload`, Kommentar in `msg.comment`."
+    rules:
+      - "Programme mit Syntax- oder Semantikfehlern werden mit `422` abgelehnt; die Fehlerliste nennt Zeile und Spalte."
+      - Unveränderter Quelltext erzeugt keine neue Version.
+    technical:
+      components:
+        - src/vplc/manager/api.py
+        - src/vplc/manager/service.py
+        - src/vplc/manager/store.py
+        - src/vplc/runtime.py
+      endpoints: ["PUT /api/plcs/{plc_id}/program"]
+      notes:
+        - Versionen liegen als JSON unter `<VPLC_DATA>/programs/<plc-id>/<n>.json` (mit SHA-256).
+        - Warmstart über `CompiledProgram.transfer_state_from`.
+    acceptance:
+      - id: version-angelegt
+        kind: effekt
+        text: Ein fehlerfreies Programm wird übernommen und als nächste Versionsnummer mit dem Autor abgelegt.
+      - id: fehler-abgelehnt
+        kind: regel
+        text: Ein Programm mit Fehlern wird abgelehnt; die Antwort nennt die Zeile des Fehlers.
+        code: "422"
+      - id: keine-doppelte-version
+        kind: regel
+        text: Wird derselbe Quelltext erneut geladen, entsteht keine neue Version.
+      - id: warmstart
+        kind: effekt
+        text: Wird im RUN geladen, bleibt die vPLC in RUN und gleichnamige Variablen behalten ihre Werte.
+    evidence:
+      - kind: integration
+        file: tests/test_api.py
+        test: test_full_lifecycle
+        covers: [version-angelegt, fehler-abgelehnt, keine-doppelte-version]
+      - kind: integration
+        file: tests/test_runtime_protocols.py
+        test: test_warm_download_keeps_values_while_running
+        covers: [warmstart]
+      - kind: integration
+        file: node-red/test/vplc_spec.js
+        test: "vplc control: stop, run, read, download with compile errors, versions"
+        covers: [version-angelegt, fehler-abgelehnt]
+    comparisons: { themenliste: vplc }
+
+  - id: programme.aktives-programm
+    title: Aktives Programm abrufen
+    group: programme.laden
+    summary: Liefert den Quelltext und die Versionsnummer des Programms, das gerade in der vPLC läuft.
+    usage:
+      - channel: api
+        text: "`GET /api/plcs/{plc}/program` → `{source, version}`."
+    dependsOn: [programme.programm-laden]
+    technical:
+      components: [src/vplc/manager/api.py, src/vplc/runtime.py]
+      endpoints: ["GET /api/plcs/{plc_id}/program"]
+    acceptance:
+      - id: aktueller-stand
+        kind: effekt
+        text: Nach zwei Downloads liefert die Abfrage den Quelltext der zweiten Version; nach Aktivieren der ersten deren Quelltext.
+    evidence:
+      - kind: integration
+        file: tests/test_programs_api.py
+        test: test_reads_active_program_source_and_version
+        covers: [aktueller-stand]
+    comparisons: { themenliste: versionsverwaltung }
+
+  - id: programme.versionen-auflisten
+    title: Versionen auflisten
+    group: programme.versionen
+    summary: Zeigt alle gespeicherten Stände einer vPLC – neueste zuerst, mit Autor und Kommentar.
+    usage:
+      - channel: api
+        text: "`GET /api/plcs/{plc}/versions`."
+      - channel: node-red
+        text: "Node `vplc control`, Aktion „Versionen auflisten“."
+    dependsOn: [programme.programm-laden]
+    technical:
+      components: [src/vplc/manager/api.py, src/vplc/manager/store.py]
+      endpoints: ["GET /api/plcs/{plc_id}/versions"]
+    acceptance:
+      - id: neueste-zuerst
+        kind: effekt
+        text: Nach Downloads durch zwei Personen erscheinen die Versionen neueste zuerst mit dem jeweiligen Autor.
+      - id: kommentar
+        kind: effekt
+        text: Der beim Laden angegebene Änderungskommentar steht an der Version.
+    evidence:
+      - kind: integration
+        file: tests/test_api.py
+        test: test_full_lifecycle
+        covers: [neueste-zuerst]
+      - kind: integration
+        file: node-red/test/vplc_spec.js
+        test: "vplc control: stop, run, read, download with compile errors, versions"
+        covers: [kommentar, neueste-zuerst]
+    comparisons: { themenliste: versionsverwaltung }
+
+  - id: programme.version-ansehen
+    title: Version ansehen
+    group: programme.versionen
+    summary: Zeigt den vollständigen Quelltext einer früheren Version samt Autor, Kommentar und Prüfsumme.
+    usage:
+      - channel: api
+        text: "`GET /api/plcs/{plc}/versions/{n}`."
+    rules:
+      - "Unbekannte Versionsnummern werden mit `404` abgelehnt."
+    dependsOn: [programme.programm-laden]
+    technical:
+      components: [src/vplc/manager/api.py, src/vplc/manager/store.py]
+      endpoints: ["GET /api/plcs/{plc_id}/versions/{version}"]
+    acceptance:
+      - id: quelltext-und-herkunft
+        kind: effekt
+        text: Version 1 liefert ihren Quelltext, Autor, Kommentar und die SHA-256-Prüfsumme des Quelltexts.
+      - id: unbekannt-404
+        kind: regel
+        text: Eine nicht vorhandene Versionsnummer wird abgelehnt.
+        code: "404"
+    evidence:
+      - kind: integration
+        file: tests/test_programs_api.py
+        test: test_shows_single_version_with_source_author_and_hash
+        covers: [quelltext-und-herkunft]
+      - kind: integration
+        file: tests/test_programs_api.py
+        test: test_rejects_unknown_version_for_view_diff_and_activate
+        covers: [unbekannt-404]
+    comparisons: { themenliste: versionsverwaltung }
+
+  - id: programme.versionen-vergleichen
+    title: Versionen vergleichen
+    group: programme.versionen
+    summary: Zeigt zeilengenau, was sich zwischen zwei Versionen geändert hat.
+    usage:
+      - channel: api
+        text: "`GET /api/plcs/{plc}/diff?a=1&b=2` → Unified Diff als Text, Kopfzeilen mit Autor und Zeitpunkt."
+    rules:
+      - "Unbekannte Versionsnummern werden mit `404` abgelehnt."
+    dependsOn: [programme.programm-laden]
+    technical:
+      components: [src/vplc/manager/api.py, src/vplc/manager/service.py]
+      endpoints: ["GET /api/plcs/{plc_id}/diff"]
+    acceptance:
+      - id: geaenderte-zeilen
+        kind: effekt
+        text: Der Vergleich zweier Versionen zeigt die entfernte und die hinzugefügte Zeile.
+      - id: unbekannt-404
+        kind: regel
+        text: Ein Vergleich mit einer nicht vorhandenen Version wird abgelehnt.
+        code: "404"
+    evidence:
+      - kind: integration
+        file: tests/test_api.py
+        test: test_full_lifecycle
+        covers: [geaenderte-zeilen]
+      - kind: integration
+        file: tests/test_programs_api.py
+        test: test_rejects_unknown_version_for_view_diff_and_activate
+        covers: [unbekannt-404]
+    comparisons: { themenliste: versionsverwaltung }
+
+  - id: programme.version-aktivieren
+    title: Frühere Version aktivieren
+    group: programme.versionen
+    summary: Lädt eine frühere Version wieder in die vPLC (Rücksprung), ohne den Quelltext erneut hochzuladen.
+    usage:
+      - channel: api
+        text: "`POST /api/plcs/{plc}/versions/{n}/activate`."
+      - channel: node-red
+        text: "Node `vplc control`, Aktion „Version aktivieren“, Versionsnummer in `msg.payload`."
+    rules:
+      - "Unbekannte Versionsnummern werden mit `404` abgelehnt; das aktive Programm bleibt unverändert."
+    dependsOn: [programme.programm-laden]
+    technical:
+      components: [src/vplc/manager/api.py, src/vplc/manager/service.py]
+      endpoints: ["POST /api/plcs/{plc_id}/versions/{version}/activate"]
+    acceptance:
+      - id: alte-version-aktiv
+        kind: effekt
+        text: Nach dem Aktivieren von Version 1 läuft die vPLC mit deren Quelltext und meldet Version 1.
+      - id: unbekannt-404
+        kind: regel
+        text: Das Aktivieren einer nicht vorhandenen Version wird abgelehnt; das aktive Programm bleibt gleich.
+        code: "404"
+    evidence:
+      - kind: integration
+        file: tests/test_api.py
+        test: test_full_lifecycle
+        covers: [alte-version-aktiv]
+      - kind: integration
+        file: tests/test_programs_api.py
+        test: test_reads_active_program_source_and_version
+        covers: [alte-version-aktiv]
+      - kind: integration
+        file: tests/test_programs_api.py
+        test: test_rejects_unknown_version_for_view_diff_and_activate
+        covers: [unbekannt-404]
+    comparisons: { themenliste: versionsverwaltung }

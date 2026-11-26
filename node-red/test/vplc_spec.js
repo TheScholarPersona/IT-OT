@@ -178,6 +178,16 @@ describe("node-red-contrib-it-ot-vplc", function () {
     assert.strictEqual(versions[0].author, "node-red-test");
   });
 
+  it("lists the PLCs of the configured manager for the editor picker", async function () {
+    await load([server()]);
+    const res = await helper.request().get("/vplc/plcs/srv").expect(200);
+    const mixer = res.body.find((p) => p.name === "Mixer");
+    assert.ok(mixer, "Mixer listed");
+    assert.deepStrictEqual(Object.keys(mixer).sort(), ["id", "mode", "name", "program"]);
+    assert.strictEqual(mixer.program, "Mixer");
+    await helper.request().get("/vplc/plcs/unbekannt").expect(404);
+  });
+
   it("shows a disconnected status for a wrong token instead of crashing", async function () {
     const flow = [
       server(),

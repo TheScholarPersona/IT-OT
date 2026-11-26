@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feature-Katalog</title>
+<style>
+:root {
+  --bg: #f5f6f8; --surface: #fff; --surface-2: #eef1f4; --border: #d9dee4;
+  --text: #1d2530; --muted: #5e6b79; --accent: #0b63c4;
+  --ok: #1a7f37; --ok-bg: #e6f4ea; --warn: #9a5b00; --warn-bg: #fdf1dc;
+  --err: #c0262d; --err-bg: #fdeaea; --info-bg: #e8f0fb;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171d; --surface: #1a2129; --surface-2: #232c36; --border: #303b47;
+    --text: #e3e8ee; --muted: #95a3b1; --accent: #5aa5f5;
+    --ok: #4cc265; --ok-bg: #1b3324; --warn: #e3a54a; --warn-bg: #3a2c15;
+    --err: #f06b6b; --err-bg: #3c1e1f; --info-bg: #1d2a3b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171d; --surface: #1a2129; --surface-2: #232c36; --border: #303b47;
+  --text: #e3e8ee; --muted: #95a3b1; --accent: #5aa5f5;
+  --ok: #4cc265; --ok-bg: #1b3324; --warn: #e3a54a; --warn-bg: #3a2c15;
+  --err: #f06b6b; --err-bg: #3c1e1f; --info-bg: #1d2a3b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 17px; margin: 0 0 4px; }
+h3 { font-size: 13px; margin: 14px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+a { color: var(--accent); }
+button, input, select { font: inherit; color: inherit; }
+input, select { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
+.sub { color: var(--muted); font-size: 12px; }
+.theme { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; padding: 12px 16px 0; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.stat .v { font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat .l { color: var(--muted); font-size: 12px; }
+.layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; padding: 16px; align-items: start; }
+nav.areas { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px; position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow: auto; }
+nav.areas button { display: flex; width: 100%; justify-content: space-between; gap: 6px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 5px 8px; cursor: pointer; }
+nav.areas button:hover { background: var(--surface-2); }
+nav.areas button.active { background: var(--surface-2); font-weight: 600; }
+nav.areas .group { padding-left: 20px; font-size: 13px; color: var(--muted); }
+.count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: normal; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--warn); }
+.dot.done { background: var(--ok); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; overflow-x: auto; }
+.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.filters input[type=search] { flex: 1 1 220px; }
+.area-head { margin: 18px 0 8px; }
+.area-head:first-child { margin-top: 0; }
+.group-head { margin: 12px 0 6px; font-weight: 600; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 10px; }
+.card-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.card .id { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 10px; padding: 1px 8px; white-space: nowrap; }
+.b-ok { background: var(--ok-bg); color: var(--ok); }
+.b-warn { background: var(--warn-bg); color: var(--warn); }
+.b-err { background: var(--err-bg); color: var(--err); }
+.b-info { background: var(--info-bg); color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chip { font-size: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 0 7px; color: var(--muted); }
+ul.plain { margin: 4px 0; padding-left: 18px; }
+ul.plain li { margin: 2px 0; }
+.acc li { list-style: none; margin-left: -18px; }
+.acc .mark { display: inline-block; width: 18px; }
+.ok-t { color: var(--ok); } .err-t { color: var(--err); } .warn-t { color: var(--warn); }
+details { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+summary { cursor: pointer; color: var(--accent); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.finding { font-size: 13px; padding: 6px 8px; border-radius: 6px; margin: 4px 0; }
+.finding.error { background: var(--err-bg); } .finding.warning { background: var(--warn-bg); } .finding.info { background: var(--info-bg); }
+.empty { color: var(--muted); padding: 20px; text-align: center; }
+.topic { border-left: 4px solid var(--border); }
+.topic.vorhanden { border-left-color: var(--ok); } .topic.teilweise { border-left-color: var(--warn); } .topic.fehlt { border-left-color: var(--err); }
+@media (max-width: 800px) {
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 12px 16px; }
+  nav.areas { position: static; max-height: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="title"></h1>
+    <div class="sub" id="meta"></div>
+  </div>
+  <button class="theme" id="theme" type="button" title="Hell/Dunkel umschalten">◐ Darstellung</button>
+</header>
+<section class="stats" id="stats"></section>
+<div class="layout">
+  <nav class="areas" id="nav" aria-label="Bereiche"></nav>
+  <main>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="filters" id="filters">
+      <input type="search" id="q" placeholder="Suchen (Titel, Beschreibung, Endpunkt, Test …)">
+      <select id="f-channel"><option value="">Alle Bedienwege</option></select>
+      <select id="f-status">
+        <option value="">Jeder Nachweisstatus</option>
+        <option value="nachgewiesen">nachgewiesen</option>
+        <option value="teilweise">teilweise nachgewiesen</option>
+        <option value="statisch">statisch geprüft</option>
+      </select>
+      <select id="f-topic"><option value="">Alle Themen</option></select>
+    </div>
+    <div id="content"></div>
+  </main>
+</div>
+<script>
+"use strict";
+const DATA = /*__CATALOG_DATA__*/null;
+const S = { tab: "katalog", area: "", group: "" };
+const CHANNEL = { web: "Web", api: "API", s7: "S7", opcua: "OPC UA", "node-red": "Node-RED", cli: "CLI", entwicklung: "Entwicklung" };
+const STATUS = {
+  nachgewiesen: ["nachgewiesen", "b-ok"], teilweise: ["teilweise nachgewiesen", "b-warn"],
+  statisch: ["statisch geprüft", "b-info"], "prüfbestand": ["Prüfbestand", "b-warn"],
+};
+const STATE = { unvollstaendig: "unvollständig", deaktiviert: "deaktiviert", "nicht-nachgewiesen": "nicht nachgewiesen" };
+const TOPIC = { vorhanden: ["vorhanden", "b-ok"], teilweise: ["teilweise", "b-warn"], fehlt: ["fehlt", "b-err"], "ohne-bezug": ["ohne Bezug", "b-info"] };
+const $ = (s) => document.querySelector(s);
+
+function el(tag, attrs, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") n.className = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined && v !== false) n.setAttribute(k, v);
+  }
+  for (const c of kids.flat(Infinity)) if (c !== null && c !== undefined && c !== false) n.append(c instanceof Node ? c : String(c));
+  return n;
+}
+// Text with `code` spans, rendered without innerHTML
+function rich(text) {
+  const frag = document.createDocumentFragment();
+  String(text || "").split(/(`[^`]+`)/).forEach((part) => {
+    frag.append(part.startsWith("`") && part.endsWith("`") && part.length > 1 ? el("code", {}, part.slice(1, -1)) : part);
+  });
+  return frag;
+}
+function badge(label, cls) { return el("span", { class: `badge ${cls}` }, label); }
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) { return null; } }
+
+// ------------------------------------------------------------------ header
+function renderHeader() {
+  document.title = DATA.title;
+  $("#title").textContent = DATA.title;
+  const when = new Date(DATA.generated).toLocaleString("de-DE");
+  $("#meta").textContent = `Erzeugt ${when} · ` + (DATA.reports.length ? `Testberichte: ${DATA.reports.join(", ")}` : "ohne Testberichte (nur statisch geprüft)");
+  const st = DATA.stats;
+  const tiles = [
+    [st.features, "Features im Katalog"], [`${st.proven}/${st.features}`, "nachgewiesen"],
+    [st.criteria, "Akzeptanzkriterien"], [st.evidence, "Nachweise"],
+    [`${st.areasDone}/${st.areas}`, "Bereiche katalogisiert"], [st.review, "im Prüfbestand"],
+    [st.errors, "Fehler"], [st.warnings, "Warnungen"],
+  ];
+  $("#stats").replaceChildren(...tiles.map(([v, l]) => el("div", { class: "stat" }, el("div", { class: "v" }, v), el("div", { class: "l" }, l))));
+  const channels = new Set(DATA.features.flatMap((f) => f.usage.map((u) => u.channel)));
+  for (const c of Object.keys(CHANNEL)) if (channels.has(c)) $("#f-channel").append(el("option", { value: c }, CHANNEL[c]));
+  for (const cmp of DATA.comparisons) for (const t of cmp.topics) $("#f-topic").append(el("option", { value: `${cmp.id}:${t.id}` }, `${cmp.title}: ${t.title}`));
+}
+
+// ------------------------------------------------------------------ navigation
+function countFor(areaId, groupId) {
+  return DATA.features.filter((f) => !f.inReview && f.area === areaId && (!groupId || f.group === groupId)).length;
+}
+function renderNav() {
+  const items = [el("button", { class: !S.area ? "active" : "", onclick: () => go("", "") }, "Alle Bereiche", el("span", { class: "count" }, DATA.stats.features))];
+  for (const a of DATA.areas) {
+    items.push(el("button", { class: S.area === a.id && !S.group ? "active" : "", title: a.summary, onclick: () => go(a.id, "") },
+      el("span", {}, el("span", { class: `dot ${a.status === "katalogisiert" ? "done" : ""}`, title: a.status }), a.title),
+      el("span", { class: "count" }, countFor(a.id))));
+    if (S.area === a.id) {
+      for (const g of a.groups) {
+        items.push(el("button", { class: `group ${S.group === g.id ? "active" : ""}`, onclick: () => go(a.id, g.id) },
+          g.title, el("span", { class: "count" }, countFor(a.id, g.id))));
+      }
+    }
+  }
+  $("#nav").replaceChildren(...items);
+}
+function go(area, group) { S.area = area; S.group = group; render(); }
+
+// ------------------------------------------------------------------ tabs
+function renderTabs() {
+  const n = DATA.features.filter((f) => f.inReview).length;
+  const tabs = [["katalog", `Katalog (${DATA.stats.features})`], ["pruefbestand", `Prüfbestand (${n})`]];
+  if (DATA.comparisons.length) tabs.push(["vergleich", "Vergleich"]);
+  tabs.push(["befunde", `Befunde (${DATA.findings.length})`]);
+  $("#tabs").replaceChildren(...tabs.map(([id, label]) => el("button", {
+    class: S.tab === id ? "active" : "", role: "tab", "aria-selected": String(S.tab === id),
+    onclick: () => { S.tab = id; render(); },
+  }, label)));
+  $("#filters").hidden = !(S.tab === "katalog" || S.tab === "pruefbestand");
+}
+
+// ------------------------------------------------------------------ feature cards
+function matches(f) {
+  const q = $("#q").value.trim().toLowerCase();
+  if (S.area && f.area !== S.area) return false;
+  if (S.group && f.group !== S.group) return false;
+  const ch = $("#f-channel").value;
+  if (ch && !f.usage.some((u) => u.channel === ch)) return false;
+  const st = $("#f-status").value;
+  if (st && f.status !== st) return false;
+  const tp = $("#f-topic").value;
+  if (tp) { const [c, t] = tp.split(":"); if (f.comparisons[c] !== t) return false; }
+  if (!q) return true;
+  const hay = [f.id, f.title, f.summary, f.description, ...f.rules, ...f.usage.map((u) => u.text),
+    ...f.technical.endpoints, ...f.technical.components, ...f.technical.nodes, ...f.technical.commands,
+    ...f.evidence.map((e) => e.test), ...f.acceptance.map((a) => a.text)].join(" ").toLowerCase();
+  return hay.includes(q);
+}
+
+function featureCard(f) {
+  const [label, cls] = STATUS[f.status] || [f.status, "b-info"];
+  const covered = (id) => !f.uncovered.includes(id);
+  const card = el("article", { class: "card", id: `f-${f.id}` },
+    el("div", { class: "card-top" },
+      el("div", {}, el("h2", {}, f.title), el("div", { class: "id" }, f.id)),
+      el("div", {}, f.inReview ? badge(STATE[f.state] || f.state, "b-warn") : badge(label, cls))),
+    el("p", {}, rich(f.summary)),
+    el("div", { class: "chips" }, f.usage.map((u) => el("span", { class: "chip" }, CHANNEL[u.channel] || u.channel))),
+  );
+  if (f.inReview) card.append(el("p", { class: "finding warning" }, el("strong", {}, "Grund: "), rich(f.reason)));
+  if (f.description) card.append(el("p", {}, rich(f.description)));
+  card.append(el("h3", {}, "Bedienung"), el("ul", { class: "plain" }, f.usage.map((u) => el("li", {}, el("strong", {}, `${CHANNEL[u.channel] || u.channel}: `), rich(u.text)))));
+  if (f.rules.length) card.append(el("h3", {}, "Regeln"), el("ul", { class: "plain" }, f.rules.map((r) => el("li", {}, rich(r)))));
+  if (f.acceptance.length) {
+    card.append(el("h3", {}, "Akzeptanzkriterien"), el("ul", { class: "plain acc" }, f.acceptance.map((a) => el("li", {},
+      el("span", { class: `mark ${f.inReview ? "" : covered(a.id) ? "ok-t" : "err-t"}`, title: covered(a.id) ? "nachgewiesen" : "ohne bestandenen Nachweis" }, f.inReview ? "•" : covered(a.id) ? "✓" : "✗"),
+      el("span", { class: "chip" }, a.kind), " ", rich(a.text), a.code ? el("span", {}, " ", el("code", {}, a.code)) : null))));
+  }
+  if (f.dependsOn.length) card.append(el("h3", {}, "Setzt voraus"), el("div", { class: "chips" }, f.dependsOn.map((d) => el("a", { href: `#f-${d}`, class: "chip" }, d))));
+  const cmp = Object.entries(f.comparisons);
+  if (cmp.length) {
+    card.append(el("h3", {}, "Vergleich"), el("div", { class: "chips" }, cmp.map(([c, t]) => {
+      const comp = DATA.comparisons.find((x) => x.id === c);
+      const topic = comp && comp.topics.find((x) => x.id === t);
+      return el("span", { class: "chip" }, `${comp ? comp.title : c}: ${topic ? topic.title : t}`);
+    })));
+  }
+
+  // technical level
+  const tech = el("details", {}, el("summary", {}, "Technische Details"));
+  const t = f.technical;
+  if (f.endpointInfo.length) {
+    tech.append(el("h3", {}, "Endpunkte"), el("div", { class: "table-wrap" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "Endpunkt"), el("th", {}, "Zweck"), el("th", {}, "Aufgerufen von (Heuristik)"))),
+      el("tbody", {}, f.endpointInfo.map((e) => el("tr", {}, el("td", {}, el("code", {}, e.id)), el("td", {}, e.summary || "–"),
+        el("td", {}, e.callers.length ? e.callers.map((c, i) => [i ? ", " : "", el("code", {}, c)]) : el("span", { class: "warn-t" }, "kein Aufruf erkannt"))))))));
+  }
+  for (const [key, title] of [["nodes", "Node-RED-Nodes"], ["commands", "Befehle"], ["uiRoutes", "Seiten"], ["components", "Komponenten"]]) {
+    if (t[key].length) tech.append(el("h3", {}, title), el("div", { class: "chips" }, t[key].map((x) => el("code", {}, x))));
+  }
+  if (t.notes.length) tech.append(el("h3", {}, "Hinweise"), el("ul", { class: "plain" }, t.notes.map((n) => el("li", {}, rich(n)))));
+  if (f.evidenceResults.length) {
+    tech.append(el("h3", {}, "Nachweise"), el("div", { class: "table-wrap" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "Test"), el("th", {}, "Art"), el("th", {}, "deckt ab"), el("th", {}, "Ergebnis"), el("th", {}, "Prüfung"))),
+      el("tbody", {}, f.evidenceResults.map((e) => {
+        const okCls = e.outcome === "bestanden" ? "b-ok" : e.outcome === "ungeprüft" ? "b-info" : "b-err";
+        const checks = [];
+        if (!e.found) checks.push(el("span", { class: "err-t" }, "Test fehlt"));
+        else {
+          if (!e.has_assertion) checks.push(el("span", { class: "err-t" }, "keine Zusicherung"));
+          else if (e.status_only) checks.push(el("span", { class: "warn-t" }, "nur Status"));
+          if (!e.related) checks.push(el("span", { class: "warn-t" }, "kein Bezug erkannt"));
+          if (!checks.length) checks.push(el("span", { class: "ok-t" }, "Zusicherung, Bezug"));
+        }
+        return el("tr", {},
+          el("td", {}, el("code", {}, `${e.file}${e.line ? ":" + e.line : ""}`), el("div", {}, e.test)),
+          el("td", {}, e.kind), el("td", {}, e.covers.join(", ")),
+          el("td", {}, badge(e.outcome, okCls), e.message ? el("div", { class: "sub" }, e.message) : null),
+          el("td", {}, checks.map((c, i) => [i ? " · " : "", c])));
+      })))));
+  }
+  if (f.findings.length) tech.append(el("h3", {}, "Befunde"), f.findings.map(findingEl));
+  card.append(tech);
+  return card;
+}
+
+function renderFeatures(inReview) {
+  const list = DATA.features.filter((f) => f.inReview === inReview && matches(f));
+  const out = [];
+  for (const a of DATA.areas) {
+    const fs = list.filter((f) => f.area === a.id);
+    if (!fs.length) continue;
+    out.push(el("div", { class: "area-head" }, el("h2", {}, a.title, " ", badge(a.status, a.status === "katalogisiert" ? "b-ok" : "b-warn")), el("div", { class: "sub" }, a.summary)));
+    for (const g of a.groups) {
+      const gs = fs.filter((f) => f.group === g.id);
+      if (!gs.length) continue;
+      out.push(el("div", { class: "group-head" }, g.title));
+      out.push(...gs.map(featureCard));
+    }
+  }
+  return out.length ? out : [el("div", { class: "empty" }, inReview ? "Der Prüfbestand ist leer." : "Keine Features für diese Auswahl.")];
+}
+
+// ------------------------------------------------------------------ comparison & findings
+function renderComparison() {
+  return DATA.comparisons.flatMap((c) => [
+    el("div", { class: "area-head" }, el("h2", {}, c.title), el("div", { class: "sub" }, c.source)),
+    ...c.topics.map((t) => {
+      const [label, cls] = TOPIC[t.status] || [t.status, "b-info"];
+      const feats = t.features.map((id) => DATA.features.find((f) => f.id === id)).filter(Boolean);
+      return el("article", { class: `card topic ${t.status}` },
+        el("div", { class: "card-top" }, el("h2", {}, t.title), badge(label, cls)),
+        t.summary ? el("p", {}, rich(t.summary)) : null,
+        feats.length ? [el("h3", {}, `Features (${feats.length})`), el("ul", { class: "plain" }, feats.map((f) => el("li", {},
+          el("a", { href: `#f-${f.id}`, onclick: () => { S.tab = f.inReview ? "pruefbestand" : "katalog"; S.area = ""; S.group = ""; render(); } }, f.title),
+          f.inReview ? " (Prüfbestand)" : "")))] : null,
+        t.gaps.length ? [el("h3", {}, "Lücken"), el("ul", { class: "plain" }, t.gaps.map((g) => el("li", {}, rich(g))))] : null);
+    }),
+  ]);
+}
+function findingEl(f) {
+  return el("div", { class: `finding ${f.level}` }, el("strong", {}, `${f.code} `), rich(f.message), f.where ? el("span", { class: "sub" }, `  ${f.where}`) : null);
+}
+function renderFindings() {
+  const out = [];
+  const order = { error: 0, warning: 1, info: 2 };
+  const fs = [...DATA.findings].sort((a, b) => order[a.level] - order[b.level]);
+  out.push(fs.length ? el("div", {}, fs.map(findingEl)) : el("div", { class: "empty" }, "Keine Befunde."));
+  if (DATA.unassigned.length) {
+    out.push(el("h3", {}, "Noch nicht zugeordnete Bestandteile"), el("div", { class: "table-wrap" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "Art"), el("th", {}, "Bestandteil"), el("th", {}, "Bereich"))),
+      el("tbody", {}, DATA.unassigned.map((u) => el("tr", {}, el("td", {}, u.kind), el("td", {}, el("code", {}, u.item)), el("td", {}, u.area || "–")))))));
+  }
+  return out;
+}
+
+// ------------------------------------------------------------------ main
+function render() {
+  renderNav();
+  renderTabs();
+  const content = S.tab === "katalog" ? renderFeatures(false) : S.tab === "pruefbestand" ? renderFeatures(true)
+    : S.tab === "vergleich" ? renderComparison() : renderFindings();
+  $("#content").replaceChildren(...content);
+}
+
+function init() {
+  const saved = store("fk.theme");
+  if (saved) document.documentElement.dataset.theme = saved;
+  $("#theme").addEventListener("click", () => {
+    const dark = document.documentElement.dataset.theme
+      ? document.documentElement.dataset.theme === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "light" : "dark";
+    store("fk.theme", document.documentElement.dataset.theme);
+  });
+  for (const id of ["#q", "#f-channel", "#f-status", "#f-topic"]) $(id).addEventListener("input", render);
+  renderHeader();
+  render();
+  if (location.hash.startsWith("#f-")) {
+    const f = DATA.features.find((x) => `#f-${x.id}` === location.hash);
+    if (f && f.inReview) { S.tab = "pruefbestand"; render(); }
+    const node = document.getElementById(location.hash.slice(1));
+    if (node) node.scrollIntoView();
+  }
+}
+init();
+</script>
+</body>
+</html>

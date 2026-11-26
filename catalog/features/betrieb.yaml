@@ -1,0 +1,228 @@
+area: betrieb
+features:
+  - id: betrieb.vplc-anlegen
+    title: vPLC anlegen
+    group: betrieb.instanzen
+    summary: Legt eine neue virtuelle Steuerung an – auf Wunsch gleich mit Programm – und startet ihre S7- und OPC-UA-Server.
+    description: |
+      Jede vPLC erhält einen eindeutigen Namen, eine Zykluszeit und eine Zyklusüberwachung. Die Ports
+      für S7 und OPC UA werden automatisch vergeben. Die neue Steuerung steht in STOP und ist sofort über
+      beide Protokolle erreichbar. Alle vPLCs lassen sich mit Betriebszustand und Programm auflisten.
+    usage:
+      - channel: api
+        text: "`POST /api/plcs` mit `name`, optional `cycle_ms`, `watchdog_ms`, `source`; `GET /api/plcs` listet alle."
+    rules:
+      - "Der Name ist eindeutig, ohne Rücksicht auf Groß-/Kleinschreibung (`409`)."
+      - "Die Zykluszeit liegt zwischen 1 und 10 000 ms (`400`)."
+    technical:
+      components: [src/vplc/manager/api.py, src/vplc/manager/service.py, src/vplc/runtime.py]
+      endpoints: ["POST /api/plcs", "GET /api/plcs"]
+      notes:
+        - Ports ab `VPLC_S7_BASE_PORT` (10102) und `VPLC_OPCUA_BASE_PORT` (4840); belegte Ports werden übersprungen.
+        - Die Zyklusüberwachung darf nicht kleiner als die Zykluszeit sein (geprüft, aber noch ohne eigenen Test).
+    acceptance:
+      - id: angelegt-in-stop
+        kind: effekt
+        text: Eine neue vPLC steht in STOP, ihr S7- und ihr OPC-UA-Server laufen.
+      - id: mit-programm
+        kind: effekt
+        text: Wird beim Anlegen ein Programm mitgegeben, ist es sofort geladen.
+      - id: in-liste
+        kind: effekt
+        text: Die angelegte vPLC erscheint mit ID, Name und Programm in der Liste.
+      - id: name-eindeutig
+        kind: regel
+        text: Ein bereits vergebener Name (auch in anderer Schreibweise) wird abgelehnt.
+        code: "409"
+      - id: zykluszeit-gueltig
+        kind: regel
+        text: Eine Zykluszeit von 0 ms wird abgelehnt.
+        code: "400"
+    evidence:
+      - { kind: integration, file: tests/test_api.py, test: test_full_lifecycle, covers: [angelegt-in-stop, name-eindeutig, zykluszeit-gueltig] }
+      - { kind: integration, file: tests/test_operation_api.py, test: test_cli_serve_starts_manager_and_persists_data, covers: [mit-programm] }
+      - { kind: integration, file: tests/test_operation_api.py, test: test_deletes_plc_together_with_its_versions, covers: [in-liste] }
+    comparisons: { themenliste: vplc }
+
+  - id: betrieb.vplc-loeschen
+    title: vPLC löschen
+    group: betrieb.instanzen
+    summary: Entfernt eine vPLC samt aller Programmversionen und gibt ihre Ports frei.
+    usage:
+      - channel: api
+        text: "`DELETE /api/plcs/{plc}`."
+    technical:
+      components: [src/vplc/manager/service.py, src/vplc/manager/store.py]
+      endpoints: ["DELETE /api/plcs/{plc_id}"]
+    acceptance:
+      - id: entfernt
+        kind: effekt
+        text: Nach dem Löschen ist die vPLC weder einzeln noch in der Liste abrufbar, ihre Versionen sind entfernt, das Audit-Log vermerkt das Löschen.
+    evidence:
+      - { kind: integration, file: tests/test_operation_api.py, test: test_deletes_plc_together_with_its_versions, covers: [entfernt] }
+    comparisons: { themenliste: vplc }
+
+  - id: betrieb.manager-starten
+    title: Manager starten
+    group: betrieb.instanzen
+    summary: Startet REST-API, Weboberfläche und alle gespeicherten vPLCs mit einem Befehl.
+    usage:
+      - channel: cli
+        text: "`vplc serve --port 8080 --data <verzeichnis>`; im Container über `docker compose up`."
+    technical:
+      components: [src/vplc/__main__.py, src/vplc/manager/api.py]
+      commands: [vplc serve]
+      notes: [Weboberfläche standardmäßig nur auf 127.0.0.1; Protokoll-Server über `VPLC_PROTOCOL_HOST`.]
+    acceptance:
+      - id: erreichbar-und-persistent
+        kind: effekt
+        text: Nach dem Start nimmt die API Aufträge an, und Konfiguration und Audit-Log liegen im angegebenen Datenverzeichnis.
+    evidence:
+      - { kind: integration, file: tests/test_operation_api.py, test: test_cli_serve_starts_manager_and_persists_data, covers: [erreichbar-und-persistent] }
+    comparisons: { themenliste: vplc }
+
+  - id: betrieb.wiederanlauf
+    title: Wiederanlauf nach Neustart
+    group: betrieb.instanzen
+    summary: Stellt nach einem Neustart des Managers alle vPLCs mit Programm und letztem Betriebszustand wieder her.
+    usage:
+      - channel: api
+        text: Automatisch beim Start des Managers.
+    dependsOn: [betrieb.vplc-anlegen]
+    technical:
+      components: [src/vplc/manager/service.py, src/vplc/manager/store.py, src/vplc/manager/api.py]
+      notes: [Zustand in `plcs.json` des Datenverzeichnisses; ausgelöst beim Start der App (`create_app`).]
+    acceptance:
+      - id: zustand-wiederhergestellt
+        kind: effekt
+        text: Eine vPLC, die vor dem Neustart in RUN war, läuft danach wieder in RUN mit derselben Programmversion.
+    evidence:
+      - { kind: integration, file: tests/test_api.py, test: test_restore_after_restart, covers: [zustand-wiederhergestellt] }
+    comparisons: { themenliste: vplc }
+
+  - id: betrieb.run-stop
+    title: RUN und STOP
+    group: betrieb.zyklus
+    summary: Schaltet eine vPLC in RUN (zyklische Bearbeitung) oder STOP.
+    usage:
+      - channel: api
+        text: "`POST /api/plcs/{plc}/run` bzw. `/stop`."
+      - channel: node-red
+        text: "Node `vplc control`, Aktion RUN oder STOP."
+    rules:
+      - "RUN ist erst mit geladenem Programm möglich (`409`)."
+    technical:
+      components: [src/vplc/runtime.py, src/vplc/manager/service.py]
+      endpoints: ["POST /api/plcs/{plc_id}/run", "POST /api/plcs/{plc_id}/stop"]
+    acceptance:
+      - id: run
+        kind: effekt
+        text: Nach RUN meldet die vPLC den Zustand RUN.
+      - id: stop-haelt-an
+        kind: effekt
+        text: Nach STOP meldet die vPLC STOP, und der Zykluszähler steigt nicht mehr.
+      - id: ohne-programm
+        kind: regel
+        text: RUN ohne geladenes Programm wird abgelehnt.
+        code: "409"
+    evidence:
+      - { kind: integration, file: tests/test_api.py, test: test_full_lifecycle, covers: [run, ohne-programm] }
+      - { kind: integration, file: tests/test_operation_api.py, test: test_stop_halts_the_scan_cycle, covers: [stop-haelt-an] }
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: "vplc control: stop, run, read, download with compile errors, versions", covers: [run, stop-haelt-an] }
+    comparisons: { themenliste: vplc }
+
+  - id: betrieb.zyklische-bearbeitung
+    title: Zyklische Programmbearbeitung
+    group: betrieb.zyklus
+    summary: Führt das Programm im RUN in der eingestellten Zykluszeit aus – Eingänge lesen, rechnen, Ausgänge schreiben.
+    description: |
+      Werte, die von außen geschrieben werden (S7, OPC UA, API), übernimmt die vPLC zu Beginn des nächsten
+      Zyklus. Das Programm sieht damit während eines Zyklus konsistente Werte, wie bei einer realen Steuerung.
+    usage:
+      - channel: api
+        text: Läuft automatisch im RUN; Zykluszeit beim Anlegen über `cycle_ms`.
+    dependsOn: [betrieb.run-stop]
+    technical:
+      components: [src/vplc/runtime.py, src/vplc/st/compiler.py]
+    acceptance:
+      - id: rechnet-zyklisch
+        kind: effekt
+        text: Ein Zähler im Programm steigt im RUN von Zyklus zu Zyklus.
+      - id: eingaenge-wirken
+        kind: effekt
+        text: Ein von außen gesetzter Eingang wirkt im nächsten Zyklus auf die Ausgänge.
+    evidence:
+      - { kind: integration, file: tests/test_runtime_protocols.py, test: test_warm_download_keeps_values_while_running, covers: [rechnet-zyklisch] }
+      - { kind: integration, file: tests/test_runtime_protocols.py, test: test_s7_read_write, covers: [rechnet-zyklisch, eingaenge-wirken] }
+    comparisons: { themenliste: vplc }
+
+  - id: betrieb.kaltstart
+    title: Kaltstart
+    group: betrieb.zyklus
+    summary: Setzt alle Variablen und Funktionsbausteine einer vPLC auf ihre Initialwerte zurück.
+    usage:
+      - channel: api
+        text: "`POST /api/plcs/{plc}/reset`."
+      - channel: node-red
+        text: "Node `vplc control`, Aktion „Kaltstart“."
+    technical:
+      components: [src/vplc/runtime.py]
+      endpoints: ["POST /api/plcs/{plc_id}/reset"]
+    acceptance:
+      - id: initialwerte
+        kind: effekt
+        text: Nach dem Kaltstart haben zuvor geänderte Variablen wieder ihre deklarierten Initialwerte.
+    evidence:
+      - { kind: integration, file: tests/test_operation_api.py, test: test_cold_restart_resets_all_values_to_initial_values, covers: [initialwerte] }
+    comparisons: { themenliste: vplc }
+
+  - id: betrieb.laufzeitfehler
+    title: STOP bei Laufzeitfehlern
+    group: betrieb.zyklus
+    summary: Geht bei Laufzeitfehlern oder Endlosschleifen wie eine echte CPU in STOP und meldet die Programmzeile.
+    usage:
+      - channel: api
+        text: "Fehler in `last_error` des Status und im Diagnosepuffer."
+    rules:
+      - Division durch 0 in Ganzzahlen ist ein Laufzeitfehler; REAL liefert Unendlich.
+      - Überschreitet ein Zyklus die Zyklusüberwachung, wird er abgebrochen.
+    technical:
+      components: [src/vplc/runtime.py, src/vplc/st/compiler.py]
+    acceptance:
+      - id: stop-mit-zeile
+        kind: effekt
+        text: Eine Division durch 0 bringt die vPLC in STOP; Fehlermeldung und Diagnosepuffer nennen die Zeile.
+      - id: endlosschleife
+        kind: regel
+        text: Eine Endlosschleife wird durch die Zyklusüberwachung abgebrochen.
+      - id: real-unendlich
+        kind: regel
+        text: Eine REAL-Division durch 0 liefert Unendlich statt eines Fehlers.
+    evidence:
+      - { kind: integration, file: tests/test_runtime_protocols.py, test: test_runtime_error_puts_plc_into_stop, covers: [stop-mit-zeile] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_watchdog_stops_endless_loop, covers: [endlosschleife] }
+      - { kind: unit, file: tests/test_st_language.py, test: test_real_division_by_zero_gives_infinity, covers: [real-unendlich] }
+    comparisons: { themenliste: vplc }
+
+  - id: betrieb.status-diagnose
+    title: Status und Diagnose
+    group: betrieb.zyklus
+    summary: Zeigt Betriebszustand, Zykluszeiten, Verbindungsdaten und den Diagnosepuffer einer vPLC.
+    usage:
+      - channel: api
+        text: "`GET /api/plcs/{plc}` – auch per Name statt ID."
+      - channel: opcua
+        text: "Knoten unter `_Status` (Mode, ScanCount, CycleTimeUs, Program)."
+    technical:
+      components: [src/vplc/runtime.py, src/vplc/manager/api.py]
+      endpoints: ["GET /api/plcs/{plc_id}"]
+    acceptance:
+      - id: kennzahlen
+        kind: effekt
+        text: Im RUN nennt der Status Zykluszeit, mittlere und maximale Bearbeitungszeit sowie S7- und OPC-UA-Verbindungsdaten.
+      - id: diagnosepuffer
+        kind: effekt
+        text: Der Diagnosepuffer enthält das Laden des Programms und den Wechsel nach RUN.
+    evidence:
+      - { kind: integration, file: tests/test_operation_api.py, test: test_status_reports_cycle_statistics_and_diagnostics, covers: [kennzahlen, diagnosepuffer] }
+    comparisons: { themenliste: telemetrie }

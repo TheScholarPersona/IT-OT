@@ -1,0 +1,62 @@
+area: s7
+features:
+  - id: s7.db-zugriff
+    title: Variablen über S7comm lesen und schreiben
+    group: s7.datenbaustein
+    summary: HMIs, SCADA-Systeme und S7-Treiber greifen wie auf eine Siemens-Steuerung auf die Variablen zu.
+    description: |
+      Jede vPLC hat einen eigenen S7-Server (Rack 0, Slot 1). Alle Variablen außer VAR_TEMP liegen in einem
+      Datenbaustein. Geschriebene Werte übernimmt die vPLC im nächsten Zyklus.
+    usage:
+      - channel: s7
+        text: "z. B. snap7: `Client.connect(host, 0, 1, 10102)`, `db_read(1, 0, n)`; node-red-contrib-s7: `DB1,X0.0`."
+    rules:
+      - Schreibzugriffe auf Konstanten werden im nächsten Zyklus überschrieben.
+    technical:
+      components: [src/vplc/io/s7.py, src/vplc/runtime.py]
+      notes: [Server auf Basis von python-snap7; Ports ab 10102, weil Port 102 Root-Rechte erfordert.]
+    acceptance:
+      - id: lesen
+        kind: effekt
+        text: Ein S7-Client liest Initialwerte, berechnete Werte und Konstanten an ihren Adressen.
+      - id: schreiben
+        kind: effekt
+        text: Per S7 gesetzte Eingänge wirken auf das Programm; die Ergebnisse sind per S7 lesbar.
+      - id: konstante-geschuetzt
+        kind: regel
+        text: Ein per S7 geschriebener Wert in einer Konstante wird wieder überschrieben.
+    evidence:
+      - { kind: integration, file: tests/test_runtime_protocols.py, test: test_s7_read_write, covers: [lesen, schreiben, konstante-geschuetzt] }
+    comparisons: { themenliste: vplc }
+
+  - id: s7.db-layout
+    title: Adressen wie im TIA Portal
+    group: s7.datenbaustein
+    summary: Legt die Variablen wie in einem nicht optimierten TIA-Portal-Datenbaustein ab und nennt jede Adresse.
+    usage:
+      - channel: api
+        text: "`GET /api/plcs/{plc}/s7-layout`; die Adressen stehen auch in der Variablenliste."
+    rules:
+      - BOOL werden bitweise gepackt, Typen ab 2 Byte beginnen auf geraden Adressen; Big Endian.
+    technical:
+      components: [src/vplc/io/s7.py, src/vplc/types.py]
+      endpoints: ["GET /api/plcs/{plc_id}/s7-layout"]
+    acceptance:
+      - id: tia-layout
+        kind: effekt
+        text: Für eine gemischte Deklaration entstehen dieselben Adressen wie in einem nicht optimierten TIA-DB.
+      - id: bool-packung
+        kind: regel
+        text: Der neunte BOOL liegt in Byte 1, Bit 0.
+      - id: kodierung
+        kind: regel
+        text: INT, REAL, BOOL und UDINT werden im S7-Format (Big Endian) kodiert.
+      - id: api-adressen
+        kind: effekt
+        text: Die API liefert für ein Programm die absoluten Adressen aller Variablen.
+    evidence:
+      - { kind: unit, file: tests/test_s7_layout.py, test: test_layout_matches_non_optimized_tia_db, covers: [tia-layout] }
+      - { kind: unit, file: tests/test_s7_layout.py, test: test_bool_packing_over_byte_boundary, covers: [bool-packung] }
+      - { kind: unit, file: tests/test_s7_layout.py, test: test_encode_decode_roundtrip_big_endian, covers: [kodierung] }
+      - { kind: integration, file: tests/test_operation_api.py, test: test_s7_layout_lists_absolute_addresses, covers: [api-adressen] }
+    comparisons: { themenliste: vplc }

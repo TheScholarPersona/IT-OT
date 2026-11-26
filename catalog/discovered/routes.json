@@ -1,0 +1,263 @@
+[
+  {
+    "kind": "ui",
+    "path": "/",
+    "methods": [
+      "GET"
+    ],
+    "name": "index",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/audit",
+    "methods": [
+      "GET"
+    ],
+    "name": "audit",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/check",
+    "methods": [
+      "POST"
+    ],
+    "name": "check",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/examples/{name}",
+    "methods": [
+      "GET"
+    ],
+    "name": "example",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/health",
+    "methods": [
+      "GET"
+    ],
+    "name": "health",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/info",
+    "methods": [
+      "GET"
+    ],
+    "name": "info",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs",
+    "methods": [
+      "GET"
+    ],
+    "name": "list_plcs",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs",
+    "methods": [
+      "POST"
+    ],
+    "name": "create_plc",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "name": "delete_plc",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_plc",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/diff",
+    "methods": [
+      "GET"
+    ],
+    "name": "diff",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/program",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_program",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/program",
+    "methods": [
+      "PUT"
+    ],
+    "name": "upload_program",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/reset",
+    "methods": [
+      "POST"
+    ],
+    "name": "reset",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/run",
+    "methods": [
+      "POST"
+    ],
+    "name": "run",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/s7-layout",
+    "methods": [
+      "GET"
+    ],
+    "name": "s7_layout",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/stop",
+    "methods": [
+      "POST"
+    ],
+    "name": "stop",
+    "summary": ""
+  },
+  {
+    "kind": "ws",
+    "path": "/api/plcs/{plc_id}/stream",
+    "methods": [
+      "WS"
+    ],
+    "name": "stream",
+    "summary": "Push variable changes to clients such as Node-RED."
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/variables",
+    "methods": [
+      "GET"
+    ],
+    "name": "variables",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/variables",
+    "methods": [
+      "PUT"
+    ],
+    "name": "write_variables",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/variables/{name}",
+    "methods": [
+      "PUT"
+    ],
+    "name": "write_variable",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/versions",
+    "methods": [
+      "GET"
+    ],
+    "name": "versions",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/versions/{version}",
+    "methods": [
+      "GET"
+    ],
+    "name": "version",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/api/plcs/{plc_id}/versions/{version}/activate",
+    "methods": [
+      "POST"
+    ],
+    "name": "activate",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/docs",
+    "methods": [
+      "GET"
+    ],
+    "name": "swagger_ui_html",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/docs/oauth2-redirect",
+    "methods": [
+      "GET"
+    ],
+    "name": "swagger_ui_redirect",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/openapi.json",
+    "methods": [
+      "GET"
+    ],
+    "name": "openapi",
+    "summary": ""
+  },
+  {
+    "kind": "http",
+    "path": "/redoc",
+    "methods": [
+      "GET"
+    ],
+    "name": "redoc_html",
+    "summary": ""
+  },
+  {
+    "kind": "ui",
+    "path": "/static",
+    "methods": [
+      "GET"
+    ],
+    "name": "static",
+    "summary": "statische Dateien"
+  }
+]

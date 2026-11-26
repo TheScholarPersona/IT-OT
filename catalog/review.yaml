@@ -1,0 +1,90 @@
+# Prüfbestand: Funktionen, die (noch) nicht vollständig per Test nachgewiesen sind.
+# Gleiches Format wie die Features, zusätzlich state und reason.
+features:
+  - id: web.vplc-verwalten
+    title: vPLCs im Browser verwalten
+    group: web.bedienung
+    summary: Liste aller vPLCs mit Betriebszustand, Anlegen per Dialog, RUN/STOP/Kaltstart/Löschen per Knopf.
+    usage:
+      - channel: web
+        text: Seitenleiste „Virtuelle SPSen“, Schaltflächen im Kopf der vPLC.
+    dependsOn: [betrieb.vplc-anlegen, betrieb.run-stop, betrieb.kaltstart, betrieb.vplc-loeschen]
+    technical:
+      components: [src/vplc/web/index.html, src/vplc/web/app.js]
+      uiRoutes: ["/", "/static"]
+    comparisons: { themenliste: vplc }
+    state: nicht-nachgewiesen
+    reason: Für die Weboberfläche gibt es bewusst keine E2E-Tests (Entscheidung beim Aufbau des Katalogs). Manuell im Browser geprüft; die zugrunde liegenden API-Funktionen sind nachgewiesen.
+
+  - id: web.programm-editor
+    title: Programm-Editor im Browser
+    group: web.bedienung
+    summary: Editor mit Zeilennummern, Prüfen-Knopf, Fehlerliste mit Sprung zur Zeile, Beispiel laden, Download mit Kommentar.
+    usage:
+      - channel: web
+        text: Registerkarte „Programm“; Strg+S lädt in die vPLC.
+    dependsOn: [programmierung.programm-pruefen, programme.programm-laden, programmierung.beispiele]
+    technical:
+      components: [src/vplc/web/app.js]
+      uiRoutes: ["/"]
+    comparisons: { themenliste: cloud-engineering }
+    state: nicht-nachgewiesen
+    reason: Keine E2E-Tests (siehe web.vplc-verwalten).
+
+  - id: web.variablen-beobachten
+    title: Variablen im Browser beobachten und setzen
+    group: web.bedienung
+    summary: Live-Tabelle aller Variablen mit S7-Adresse und OPC-UA-Knoten, Filter und Schaltflächen zum Setzen.
+    usage:
+      - channel: web
+        text: Registerkarte „Variablen“ (Aktualisierung alle 0,5 s).
+    dependsOn: [prozessdaten.variablen-lesen, prozessdaten.variable-schreiben]
+    technical:
+      components: [src/vplc/web/app.js]
+      uiRoutes: ["/"]
+    comparisons: { themenliste: vplc }
+    state: nicht-nachgewiesen
+    reason: Keine E2E-Tests (siehe web.vplc-verwalten).
+
+  - id: web.versionen-diff
+    title: Versionen im Browser vergleichen
+    group: web.bedienung
+    summary: Versionsliste mit Autor, Kommentar und Prüfsumme, farbiger Diff, Öffnen im Editor und Aktivieren.
+    usage:
+      - channel: web
+        text: Registerkarte „Versionen“.
+    dependsOn: [programme.versionen-auflisten, programme.versionen-vergleichen, programme.version-aktivieren]
+    technical:
+      components: [src/vplc/web/app.js]
+      uiRoutes: ["/"]
+    comparisons: { themenliste: versionsverwaltung }
+    state: nicht-nachgewiesen
+    reason: Keine E2E-Tests (siehe web.vplc-verwalten).
+
+  - id: web.diagnose-audit
+    title: Diagnose und Audit-Log im Browser
+    group: web.bedienung
+    summary: Kennzahlen zum Zyklus, Verbindungsdaten, Diagnosepuffer und Audit-Log der vPLC.
+    usage:
+      - channel: web
+        text: Kopfbereich der vPLC sowie Registerkarten „Diagnose“ und „Audit-Log“.
+    dependsOn: [betrieb.status-diagnose, audit.protokoll]
+    technical:
+      components: [src/vplc/web/app.js]
+      uiRoutes: ["/"]
+    comparisons: { themenliste: ot-security }
+    state: nicht-nachgewiesen
+    reason: Keine E2E-Tests (siehe web.vplc-verwalten).
+
+  - id: programmierung.zaehler-auf-ab
+    title: Auf-/Abwärtszähler CTUD
+    group: programmierung.bibliothek
+    summary: Kombinierter Auf- und Abwärtszähler mit Laden und Rücksetzen.
+    usage:
+      - channel: entwicklung
+        text: "`c(CU := a, CD := b, R := r, LD := l, PV := 10);`"
+    technical:
+      components: [src/vplc/st/stdlib.py]
+    comparisons: { themenliste: vplc }
+    state: nicht-nachgewiesen
+    reason: Implementiert, aber ohne Test. Nachweis durch einen Unit-Test in tests/test_function_blocks.py nachholen.

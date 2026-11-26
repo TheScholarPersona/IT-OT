@@ -1,0 +1,155 @@
+area: prozessdaten
+features:
+  - id: prozessdaten.variablen-lesen
+    title: Variablen lesen
+    group: prozessdaten.variablen
+    summary: Listet alle Variablen einer vPLC mit Typ, Bereich, aktuellem Wert, S7-Adresse und OPC-UA-Knoten.
+    usage:
+      - channel: api
+        text: "`GET /api/plcs/{plc}/variables`."
+      - channel: node-red
+        text: "Node `vplc control`, Aktion „Alle Variablen lesen“ → `msg.payload = {Name: Wert}`."
+    technical:
+      components: [src/vplc/runtime.py, src/vplc/manager/api.py]
+      endpoints: ["GET /api/plcs/{plc_id}/variables"]
+    acceptance:
+      - id: werte-mit-adresse
+        kind: effekt
+        text: Die Liste nennt je Variable Name und S7-Adresse; Werte entsprechen dem aktuellen Stand.
+      - id: node-red-lesen
+        kind: effekt
+        text: Über Node-RED gelesen, enthält das Ergebnis die Eingangsvariablen des Programms.
+    evidence:
+      - { kind: integration, file: tests/test_api.py, test: test_full_lifecycle, covers: [werte-mit-adresse] }
+      - { kind: integration, file: tests/test_operation_api.py, test: test_cold_restart_resets_all_values_to_initial_values, covers: [werte-mit-adresse] }
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: "vplc control: stop, run, read, download with compile errors, versions", covers: [node-red-lesen] }
+    comparisons: { themenliste: vplc }
+
+  - id: prozessdaten.variable-schreiben
+    title: Variable schreiben
+    group: prozessdaten.variablen
+    summary: Setzt den Wert einer Variable; im RUN übernimmt die vPLC ihn zu Beginn des nächsten Zyklus.
+    usage:
+      - channel: api
+        text: "`PUT /api/plcs/{plc}/variables/{name}` mit `{value}`."
+      - channel: node-red
+        text: "Node `vplc out` mit Variable im Node oder in `msg.topic`."
+    rules:
+      - "Unbekannte Variablen werden mit `404` abgelehnt."
+      - "Konstanten sind schreibgeschützt (`403`)."
+      - Werte werden in den Typ der Variable umgewandelt, Ganzzahlen laufen dabei über.
+    technical:
+      components: [src/vplc/runtime.py, src/vplc/manager/service.py]
+      endpoints: ["PUT /api/plcs/{plc_id}/variables/{name}"]
+    acceptance:
+      - id: wirkt-im-zyklus
+        kind: effekt
+        text: Ein gesetzter Eingang wirkt im RUN auf das Programmergebnis.
+      - id: unbekannt
+        kind: regel
+        text: Das Schreiben einer unbekannten Variable wird abgelehnt.
+        code: "404"
+      - id: konstante
+        kind: regel
+        text: Das Schreiben einer Konstante wird abgelehnt.
+        code: "403"
+      - id: typumwandlung
+        kind: regel
+        text: Ein zu großer Wert für eine INT-Variable läuft wie auf der SPS über.
+    evidence:
+      - { kind: integration, file: tests/test_stream_api.py, test: test_stream_snapshot_changes_and_status, covers: [wirkt-im-zyklus] }
+      - { kind: integration, file: tests/test_api.py, test: test_full_lifecycle, covers: [unbekannt] }
+      - { kind: integration, file: tests/test_stream_api.py, test: test_name_lookup_and_bulk_write, covers: [konstante] }
+      - { kind: integration, file: tests/test_runtime_protocols.py, test: test_write_variable_validation, covers: [typumwandlung] }
+    comparisons: { themenliste: vplc }
+
+  - id: prozessdaten.mehrere-schreiben
+    title: Mehrere Variablen auf einmal schreiben
+    group: prozessdaten.variablen
+    summary: Schreibt mehrere Variablen in einem Auftrag – entweder alle oder keine.
+    usage:
+      - channel: api
+        text: "`PUT /api/plcs/{plc}/variables` mit `{\"values\": {\"Start\": true, \"Soll\": 7}}`."
+      - channel: node-red
+        text: "Node `vplc out` mit `msg.payload = {Name: Wert, …}`."
+    rules:
+      - "Ist eine Variable unbekannt (`404`) oder konstant (`403`), wird keine geschrieben."
+    technical:
+      components: [src/vplc/manager/service.py, src/vplc/runtime.py]
+      endpoints: ["PUT /api/plcs/{plc_id}/variables"]
+    acceptance:
+      - id: alle-geschrieben
+        kind: effekt
+        text: Zwei Variablen werden in einem Auftrag geschrieben und danach mit den neuen Werten gelesen.
+      - id: alles-oder-nichts
+        kind: regel
+        text: Enthält der Auftrag eine unbekannte Variable, bleibt auch die gültige unverändert.
+        code: "404"
+      - id: konstante
+        kind: regel
+        text: Ein Auftrag mit einer Konstante wird abgelehnt.
+        code: "403"
+    evidence:
+      - { kind: integration, file: tests/test_stream_api.py, test: test_name_lookup_and_bulk_write, covers: [alle-geschrieben, alles-oder-nichts, konstante] }
+      - { kind: integration, file: node-red/test/vplc_spec.js, test: vplc out writes an object atomically and reports errors to catch, covers: [alle-geschrieben, alles-oder-nichts] }
+    comparisons: { themenliste: vplc }
+
+  - id: prozessdaten.live-stream
+    title: Live-Werte per WebSocket
+    group: prozessdaten.live
+    summary: Meldet Änderungen von Variablen und Betriebszustand sofort an verbundene Programme.
+    description: |
+      Nach dem Verbinden kommt ein vollständiger Stand, danach nur noch Änderungen. Nach einem
+      Programm-Download folgt ein neuer vollständiger Stand. Die Auswahl lässt sich auf einzelne
+      Variablen beschränken; unbekannte Namen werden gemeldet.
+    usage:
+      - channel: api
+        text: "`WS /api/plcs/{plc}/stream?interval_ms=100&variables=A,B`; Nachrichten `snapshot`, `changes`, `status`."
+      - channel: node-red
+        text: Node `vplc in`.
+    rules:
+      - "Mit API-Token ist die Verbindung ohne gültiges Token nicht möglich (Close-Code `4401`)."
+      - "Eine unbekannte vPLC beendet die Verbindung mit `4404`."
+    technical:
+      components: [src/vplc/manager/api.py, src/vplc/runtime.py]
+      endpoints: ["WS /api/plcs/{plc_id}/stream"]
+    acceptance:
+      - id: snapshot
+        kind: effekt
+        text: Beim Verbinden kommen die gewählten Variablen mit aktuellem Wert; unbekannte Namen werden aufgeführt.
+      - id: aenderungen
+        kind: effekt
+        text: Wechsel nach RUN, geänderte Werte und ein neuer Programmstand werden gemeldet.
+      - id: token
+        kind: regel
+        text: Ohne gültiges Token wird die Verbindung abgewiesen; Token per Header oder Parameter wird akzeptiert.
+        code: "4401"
+      - id: unbekannte-vplc
+        kind: regel
+        text: Für eine unbekannte vPLC wird die Verbindung abgewiesen.
+        code: "4404"
+    evidence:
+      - { kind: integration, file: tests/test_stream_api.py, test: test_stream_snapshot_changes_and_status, covers: [snapshot, aenderungen] }
+      - { kind: integration, file: tests/test_stream_api.py, test: test_stream_requires_token_and_existing_plc, covers: [token, unbekannte-vplc] }
+    comparisons: { themenliste: telemetrie }
+
+  - id: prozessdaten.ansprache-per-name
+    title: vPLC per Name ansprechen
+    group: prozessdaten.variablen
+    summary: Alle Aufrufe akzeptieren statt der ID auch den Namen der vPLC (ohne Rücksicht auf Groß-/Kleinschreibung).
+    usage:
+      - channel: api
+        text: "z. B. `PUT /api/plcs/Presse 1/variables`."
+      - channel: node-red
+        text: Feld „vPLC“ in allen vPLC-Nodes.
+    technical:
+      components: [src/vplc/manager/service.py]
+      endpoints: ["GET /api/plcs/{plc_id}"]
+      notes: [Das Audit-Log speichert immer die feste ID.]
+    acceptance:
+      - id: name-statt-id
+        kind: effekt
+        text: Status und Schreibaufträge funktionieren mit dem Namen; das Audit-Log vermerkt die ID.
+    evidence:
+      - { kind: integration, file: tests/test_stream_api.py, test: test_name_lookup_and_bulk_write, covers: [name-statt-id] }
+    comparisons: { themenliste: vplc }

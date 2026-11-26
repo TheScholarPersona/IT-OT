@@ -1,0 +1,67 @@
+id: themenliste
+title: Themenliste (Anforderung)
+source: Anforderung im Projekt – Hauptfokus virtuelle SPS, weitere Themen mit niedrigerer Priorität
+topics:
+  - id: vplc
+    title: Virtuelle SPS
+    status: vorhanden
+    summary: Steuerungsprogramme laufen als Software und sind über S7 und OPC UA erreichbar.
+    gaps:
+      - Arrays, Strukturen, STRING und eigene Funktionsbausteine
+      - Siemens-SCL-Dialekt und Import aus TIA Portal
+      - Ein Container je vPLC
+  - id: backups
+    title: Automatische SPS-Backups
+    status: fehlt
+    summary: Sicherung von Maschinenprogrammen realer Steuerungen und schnelle Wiederherstellung.
+    gaps:
+      - Edge-Agent zum Auslesen realer Steuerungen
+      - Zeitgesteuerte Sicherung und Wiederherstellung
+  - id: versionsverwaltung
+    title: Versionsverwaltung
+    status: teilweise
+    summary: Nachvollziehen, wer wann welchen Programmcode geändert hat.
+    gaps:
+      - Git als Speicher, Branches und Freigaben
+      - Abgleich Online-Stand gegen gespeicherten Stand realer Steuerungen
+  - id: cloud-engineering
+    title: Cloud Engineering
+    status: teilweise
+    summary: SPS-Programmierung und Entwicklungswerkzeuge im Browser.
+    gaps:
+      - Editor mit Syntaxhervorhebung und Autovervollständigung
+      - Online-Beobachtung im Quelltext, Haltepunkte
+  - id: industrial-devops
+    title: Industrial DevOps
+    status: teilweise
+    summary: Standardisierte und automatisierte Softwareänderungen.
+    gaps:
+      - Unit-Tests für ST-Programme
+      - Freigabe-Workflow vom Test zur realen Steuerung
+  - id: ki-codeanalyse
+    title: KI-Codeanalyse
+    status: fehlt
+    summary: Bestehenden SPS-Code verstehen und automatisch dokumentieren.
+  - id: remote-access
+    title: Remote Access
+    status: fehlt
+    summary: Sicherer Fernzugriff auf Maschinensteuerungen.
+  - id: ot-security
+    title: OT-Cybersecurity
+    status: teilweise
+    summary: Überwachung von Schwachstellen und Protokollierung von Zugriffen.
+    gaps:
+      - Benutzer- und Rollenverwaltung
+      - Asset-Inventar und Abgleich mit Hersteller-Advisories
+      - Verschlüsselung für OPC UA
+  - id: telemetrie
+    title: PLC-Telemetrie
+    status: teilweise
+    summary: Tatsächliche Betriebsdaten der Steuerungen erfassen.
+    gaps:
+      - Zeitreihenspeicher und Kennzahlen
+      - MQTT/Sparkplug B
+  - id: ohne-bezug
+    title: Ohne Bezug zur Themenliste
+    status: ohne-bezug
+    summary: Funktionen, die keinem Thema der Anforderung zugeordnet sind (z. B. dieser Katalog).
