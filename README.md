@@ -101,7 +101,8 @@ cd node-red && npm install && npm test    # 7 Tests: Node-RED-Nodes gegen echten
 ```
 
 Was die vPLC nachweislich kann, zeigt der geprüfte [Feature-Katalog](docs/feature-katalog.md)
-(45 Features, jedes per bestandenem Test belegt; Ansicht als CI-Artefakt).
+(45 Features, jedes per bestandenem Test belegt) – als Ansicht in
+[`docs/feature-katalog/index.html`](docs/feature-katalog/index.html).
 
 Aufbau und Designentscheidungen: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) ·
 Weitere Ausbaustufen: [docs/ROADMAP.md](docs/ROADMAP.md)

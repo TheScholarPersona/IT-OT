@@ -2,7 +2,11 @@
 
 Der Feature-Katalog zeigt geprüft, was die IT-OT vPLC kann – fachlich für das Produktteam, technisch für
 die Entwicklung. Er steht in YAML unter `catalog/` (einzige Quelle) und wird in jeder CI gegen Code und
-Testergebnisse geprüft. Die Ansicht (`catalog/dist/index.html`) ist ein Artefakt des CI-Laufs.
+Testergebnisse geprüft.
+
+**Ansicht:** [`docs/feature-katalog/index.html`](feature-katalog/index.html) – eine eigenständige HTML-Datei
+(im Browser öffnen, kein Server nötig), dazu die Daten als `catalog.json`. Sie ist ein Stand zum Zeitpunkt des
+letzten Commits; die jeweils aktuelle Ansicht erzeugt jeder CI-Lauf als Artefakt.
 
 ## Stand
 
@@ -50,6 +54,7 @@ pytest tools/feature_catalog/tests --junitxml=reports/catalog-junit.xml
 # prüfen und Ansicht erzeugen
 PYTHONPATH=tools python -m feature_catalog check --reports reports      # Exit-Code 1 bei Fehlern
 PYTHONPATH=tools python -m feature_catalog build --reports reports      # → catalog/dist/index.html
+PYTHONPATH=tools python -m feature_catalog build --reports reports --out docs/feature-katalog   # Stand im Repo aktualisieren
 PYTHONPATH=tools python -m feature_catalog review > /tmp/review.md      # Tabelle für Regel N7
 
 # nach Änderungen an Endpunkten die Exportdatei erneuern
