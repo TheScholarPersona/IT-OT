@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
+import math
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -48,6 +51,23 @@ class SourceCheck(BaseModel):
 
 class VariableWrite(BaseModel):
     value: bool | int | float | str
+
+
+class VariablesWrite(BaseModel):
+    values: dict[str, bool | int | float | str] = Field(min_length=1, max_length=1000)
+
+
+def _json_value(v):
+    """JSON cannot carry NaN/Infinity; send them as strings."""
+    if isinstance(v, float) and not math.isfinite(v):
+        return "NaN" if math.isnan(v) else ("Infinity" if v > 0 else "-Infinity")
+    return v
+
+
+def _changed(old, new) -> bool:
+    if isinstance(old, float) and isinstance(new, float) and math.isnan(old) and math.isnan(new):
+        return False
+    return old != new or type(old) is not type(new)
 
 
 # ------------------------------------------------------------------ app
@@ -129,6 +149,8 @@ def create_app(data_dir: str | None = None, api_token: str | None = None,
     @app.get("/api/audit")
     async def audit(limit: int = 200, plc_id: str | None = None,
                     m: PLCManager = Depends(manager), _: str = Depends(user)):
+        if plc_id:
+            plc_id = m.get(plc_id).id
         return m.store.read_audit(plc_id, max(1, min(limit, 2000)))
 
     # ------------------------------------------------------------ PLCs
@@ -188,6 +210,101 @@ def create_app(data_dir: str | None = None, api_token: str | None = None,
             raise HTTPException(400, f"Ungültiger Wert: {e}") from None
         return {"name": name, "value": value}
 
+    @app.put("/api/plcs/{plc_id}/variables")
+    async def write_variables(plc_id: str, body: VariablesWrite,
+                              m: PLCManager = Depends(manager), u: str = Depends(user)):
+        try:
+            values = m.write_variables(u, plc_id, body.values)
+        except KeyError as e:
+            raise HTTPException(404, f"Variable '{e.args[0]}' nicht gefunden") from None
+        except PermissionError as e:
+            raise HTTPException(403, str(e)) from None
+        except (ValueError, TypeError) as e:
+            raise HTTPException(400, f"Ungültiger Wert: {e}") from None
+        return {"values": values}
+
+    @app.websocket("/api/plcs/{plc_id}/stream")
+    async def stream(websocket: WebSocket, plc_id: str, interval_ms: int = 100,
+                     variables: str | None = None, token: str | None = None):
+        """Push variable changes to clients such as Node-RED.
+
+        Messages: ``snapshot`` (on connect and after each program download),
+        ``changes`` (only changed values) and ``status`` (mode changes).
+        Authentication: ``Authorization: Bearer`` header or ``?token=``.
+        """
+        if api_token:
+            header = websocket.headers.get("authorization", "")
+            ok = hmac.compare_digest(header, f"Bearer {api_token}") or (
+                token is not None and hmac.compare_digest(token, api_token))
+            if not ok:
+                await websocket.close(code=4401, reason="Ungültiges oder fehlendes API-Token")
+                return
+        m: PLCManager = websocket.app.state.manager
+        try:
+            plc = m.get(plc_id)
+        except NotFound:
+            await websocket.close(code=4404, reason=f"vPLC '{plc_id}' nicht gefunden")
+            return
+        await websocket.accept()
+        interval = max(20, min(interval_ms, 60_000)) / 1000.0
+        wanted = {v.strip().upper() for v in variables.split(",") if v.strip()} if variables else None
+
+        def current() -> dict:
+            vals = plc.values()
+            if wanted is not None:
+                vals = {k: v for k, v in vals.items() if k.upper() in wanted}
+            return vals
+
+        def status_of() -> dict:
+            s = plc.status()
+            return {k: s[k] for k in ("id", "name", "mode", "program", "program_version", "last_error")}
+
+        def now() -> str:
+            return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+        async def send_snapshot() -> tuple[dict, dict]:
+            vals, status = current(), status_of()
+            known = {k.upper() for k in plc.values()}
+            await websocket.send_json({
+                "type": "snapshot", "ts": now(), "status": status,
+                "values": {k: _json_value(v) for k, v in vals.items()},
+                "unknown": sorted(w for w in wanted - known) if wanted else [],
+            })
+            return vals, status
+
+        async def reader():
+            # Drain incoming frames so that close/ping are handled; clients only listen.
+            while True:
+                msg = await websocket.receive()
+                if msg["type"] == "websocket.disconnect":
+                    return
+
+        reader_task = asyncio.create_task(reader())
+        try:
+            last_vals, last_status = await send_snapshot()
+            while not reader_task.done():
+                await asyncio.sleep(interval)
+                if plc.id not in m.plcs:
+                    await websocket.close(code=4404, reason="vPLC wurde gelöscht")
+                    break
+                status = status_of()
+                if status["program_version"] != last_status["program_version"] or \
+                        status["program"] != last_status["program"]:
+                    last_vals, last_status = await send_snapshot()
+                    continue
+                if status != last_status:
+                    await websocket.send_json({"type": "status", "ts": now(), "status": status})
+                    last_status = status
+                vals = current()
+                changes = {k: _json_value(v) for k, v in vals.items() if _changed(last_vals.get(k), v)}
+                if changes:
+                    await websocket.send_json({"type": "changes", "ts": now(), "values": changes})
+                    last_vals = vals
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        finally:
+            reader_task.cancel()
+
     @app.get("/api/plcs/{plc_id}/s7-layout")
     async def s7_layout(plc_id: str, m: PLCManager = Depends(manager), _: str = Depends(user)):
         plc = m.get(plc_id)
@@ -206,13 +323,13 @@ def create_app(data_dir: str | None = None, api_token: str | None = None,
 
     @app.get("/api/plcs/{plc_id}/versions")
     async def versions(plc_id: str, m: PLCManager = Depends(manager), _: str = Depends(user)):
-        m.get(plc_id)
+        plc_id = m.get(plc_id).id
         return [v.meta() for v in reversed(m.store.list_versions(plc_id))]
 
     @app.get("/api/plcs/{plc_id}/versions/{version}")
     async def version(plc_id: str, version: int, m: PLCManager = Depends(manager),
                       _: str = Depends(user)):
-        m.get(plc_id)
+        plc_id = m.get(plc_id).id
         pv = m.store.get_version(plc_id, version)
         if pv is None:
             raise HTTPException(404, "Version nicht gefunden")

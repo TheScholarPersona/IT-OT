@@ -210,6 +210,24 @@ class VirtualPLC:
                 self.s7.publish(self.program)
         return coerced
 
+    def validate_writes(self, values: dict[str, object]) -> None:
+        """Raise KeyError/PermissionError/ValueError if any write would be rejected."""
+        if self.program is None:
+            raise KeyError(next(iter(values), ""))
+        for name, value in values.items():
+            var = self.program.variables.get(name.upper())
+            if var is None:
+                raise KeyError(name)
+            if not var.writable:
+                raise PermissionError(f"'{var.name}' ist eine Konstante")
+            coerce(var.type, value)
+
+    def values(self) -> dict[str, object]:
+        """Current values of all exposed variables (name → value)."""
+        if self.program is None:
+            return {}
+        return {v.name: v.value for v in self.program.variables.values() if v.section != "VAR_TEMP"}
+
     def _apply_external(self, writes: dict[str, object]) -> None:
         if not writes or self.program is None:
             return

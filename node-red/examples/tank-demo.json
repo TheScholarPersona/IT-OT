@@ -1,0 +1,395 @@
+[
+  {
+    "id": "tank-tab",
+    "type": "tab",
+    "label": "vPLC Tank-Demo",
+    "info": "Voraussetzung: eine vPLC namens **Tank** mit dem Beispielprogramm `tank` (Weboberfläche → Programm → Beispiel laden)."
+  },
+  {
+    "id": "c1",
+    "type": "comment",
+    "z": "tank-tab",
+    "x": 170,
+    "y": 40,
+    "name": "1) vPLC steuern",
+    "info": "RUN/STOP und Status abfragen"
+  },
+  {
+    "id": "i-run",
+    "type": "inject",
+    "z": "tank-tab",
+    "x": 130,
+    "y": 80,
+    "name": "RUN",
+    "props": [
+      {
+        "p": "action",
+        "v": "run",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "once": false,
+    "topic": "",
+    "wires": [
+      [
+        "ctl-msg"
+      ]
+    ]
+  },
+  {
+    "id": "i-stop",
+    "type": "inject",
+    "z": "tank-tab",
+    "x": 130,
+    "y": 120,
+    "name": "STOP",
+    "props": [
+      {
+        "p": "action",
+        "v": "stop",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "once": false,
+    "topic": "",
+    "wires": [
+      [
+        "ctl-msg"
+      ]
+    ]
+  },
+  {
+    "id": "i-status",
+    "type": "inject",
+    "z": "tank-tab",
+    "x": 140,
+    "y": 160,
+    "name": "Status",
+    "props": [
+      {
+        "p": "action",
+        "v": "status",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "once": false,
+    "topic": "",
+    "wires": [
+      [
+        "ctl-msg"
+      ]
+    ]
+  },
+  {
+    "id": "ctl-msg",
+    "type": "vplc control",
+    "z": "tank-tab",
+    "x": 350,
+    "y": 120,
+    "server": "vplc-srv",
+    "plc": "Tank",
+    "action": "msg",
+    "name": "Tank steuern",
+    "wires": [
+      [
+        "dbg-ctl"
+      ]
+    ]
+  },
+  {
+    "id": "dbg-ctl",
+    "type": "debug",
+    "z": "tank-tab",
+    "x": 560,
+    "y": 120,
+    "name": "Antwort",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "complete": "payload",
+    "wires": []
+  },
+  {
+    "id": "c2",
+    "type": "comment",
+    "z": "tank-tab",
+    "x": 180,
+    "y": 220,
+    "name": "2) Sollwerte schreiben"
+  },
+  {
+    "id": "i-soll80",
+    "type": "inject",
+    "z": "tank-tab",
+    "x": 150,
+    "y": 260,
+    "name": "Sollwert 80 %",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "payload": "80",
+    "payloadType": "num",
+    "repeat": "",
+    "once": false,
+    "topic": "",
+    "wires": [
+      [
+        "out-soll"
+      ]
+    ]
+  },
+  {
+    "id": "i-soll40",
+    "type": "inject",
+    "z": "tank-tab",
+    "x": 150,
+    "y": 300,
+    "name": "Sollwert 40 %",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "payload": "40",
+    "payloadType": "num",
+    "repeat": "",
+    "once": false,
+    "topic": "",
+    "wires": [
+      [
+        "out-soll"
+      ]
+    ]
+  },
+  {
+    "id": "out-soll",
+    "type": "vplc out",
+    "z": "tank-tab",
+    "x": 370,
+    "y": 280,
+    "server": "vplc-srv",
+    "plc": "Tank",
+    "variable": "Sollwert",
+    "name": "Tank.Sollwert"
+  },
+  {
+    "id": "i-hand",
+    "type": "inject",
+    "z": "tank-tab",
+    "x": 160,
+    "y": 360,
+    "name": "Handbetrieb, Pumpe aus",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "payload": "{\"Automatik\":false,\"Pumpe\":false}",
+    "payloadType": "json",
+    "repeat": "",
+    "once": false,
+    "topic": "",
+    "wires": [
+      [
+        "out-multi"
+      ]
+    ]
+  },
+  {
+    "id": "i-auto",
+    "type": "inject",
+    "z": "tank-tab",
+    "x": 150,
+    "y": 400,
+    "name": "Automatik ein",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "payload": "{\"Automatik\":true}",
+    "payloadType": "json",
+    "repeat": "",
+    "once": false,
+    "topic": "",
+    "wires": [
+      [
+        "out-multi"
+      ]
+    ]
+  },
+  {
+    "id": "out-multi",
+    "type": "vplc out",
+    "z": "tank-tab",
+    "x": 400,
+    "y": 380,
+    "server": "vplc-srv",
+    "plc": "Tank",
+    "variable": "",
+    "name": "Tank (mehrere Variablen)"
+  },
+  {
+    "id": "catch",
+    "type": "catch",
+    "z": "tank-tab",
+    "x": 130,
+    "y": 440,
+    "scope": [
+      "out-soll",
+      "out-multi",
+      "ctl-msg"
+    ],
+    "uncaught": false,
+    "name": "Fehler",
+    "wires": [
+      [
+        "dbg-err"
+      ]
+    ]
+  },
+  {
+    "id": "dbg-err",
+    "type": "debug",
+    "z": "tank-tab",
+    "x": 330,
+    "y": 440,
+    "name": "Fehler",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "complete": "error",
+    "wires": []
+  },
+  {
+    "id": "c3",
+    "type": "comment",
+    "z": "tank-tab",
+    "x": 170,
+    "y": 500,
+    "name": "3) Werte beobachten"
+  },
+  {
+    "id": "in-tank",
+    "type": "vplc in",
+    "z": "tank-tab",
+    "x": 150,
+    "y": 560,
+    "server": "vplc-srv",
+    "plc": "Tank",
+    "variables": "Fuellstand, Pumpe, Alarm_Hoch, Alarm_Tief",
+    "output": "each",
+    "interval": 200,
+    "initial": true,
+    "name": "Tank-Werte",
+    "wires": [
+      [
+        "sw-alarm",
+        "rbe-level"
+      ]
+    ]
+  },
+  {
+    "id": "rbe-level",
+    "type": "switch",
+    "z": "tank-tab",
+    "x": 370,
+    "y": 540,
+    "name": "nur Füllstand",
+    "property": "topic",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "Fuellstand",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "wires": [
+      [
+        "round"
+      ]
+    ]
+  },
+  {
+    "id": "round",
+    "type": "function",
+    "z": "tank-tab",
+    "x": 560,
+    "y": 540,
+    "name": "auf 1 % runden",
+    "func": "const v = Math.round(msg.payload);\nif (v === context.get('last')) return null;\ncontext.set('last', v);\nmsg.payload = v;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "wires": [
+      [
+        "dbg-level"
+      ]
+    ]
+  },
+  {
+    "id": "dbg-level",
+    "type": "debug",
+    "z": "tank-tab",
+    "x": 760,
+    "y": 540,
+    "name": "Füllstand %",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "complete": "payload",
+    "wires": []
+  },
+  {
+    "id": "sw-alarm",
+    "type": "function",
+    "z": "tank-tab",
+    "x": 370,
+    "y": 600,
+    "wires": [
+      [
+        "dbg-alarm"
+      ]
+    ],
+    "name": "Alarm aktiv?",
+    "func": "// nur Alarm-Variablen, nur wenn sie TRUE werden\nif (msg.topic.startsWith(\"Alarm_\") && msg.payload === true) {\n    return msg;\n}\nreturn null;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": []
+  },
+  {
+    "id": "dbg-alarm",
+    "type": "debug",
+    "z": "tank-tab",
+    "x": 560,
+    "y": 600,
+    "name": "ALARM",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "complete": "topic",
+    "wires": []
+  },
+  {
+    "id": "vplc-srv",
+    "type": "vplc-server",
+    "name": "vPLC-Manager",
+    "url": "${VPLC_URL}",
+    "user": "node-red"
+  }
+]

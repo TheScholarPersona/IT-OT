@@ -1,13 +1,14 @@
 # Architektur
 
 ```
-                 Browser (Web-UI)            CI/CD, Skripte
-                        │  REST/JSON                │
-              ┌─────────▼───────────────────────────▼─────────┐
+        Browser (Web-UI)      Node-RED (vplc-Nodes)   CI/CD, Skripte
+                │                     │                     │
+                │ REST                │ REST + WebSocket    │
+              ┌─▼─────────────────────▼─────────────────────▼──┐
               │  vPLC-Manager (FastAPI)                        │
               │  • PLCManager: Instanzen, Ports, Lebenszyklus  │
               │  • Store: Programmversionen, Audit-Log (Datei) │
-              └───────┬───────────────────┬───────────────────┘
+              └───────┬───────────────────┬────────────────────┘
                       │                   │
            ┌──────────▼───────┐  ┌────────▼─────────┐
            │ VirtualPLC "A"   │  │ VirtualPLC "B"   │   … je Instanz:
@@ -33,6 +34,7 @@
 | `vplc/io/opcua.py` | OPC-UA-Server (asyncua) mit Variablen- und Statusknoten. |
 | `vplc/manager/` | REST-API, Persistenz, Versionsverwaltung, Audit-Log, Wiederherstellung nach Neustart. |
 | `vplc/web/` | Weboberfläche (HTML/CSS/JS ohne Build-Schritt). |
+| `node-red/` | Node-RED-Paket: `vplc in` (WebSocket-Stream), `vplc out`, `vplc control`, Konfigurations-Node. |
 
 ## Scan-Zyklus
 
@@ -58,6 +60,10 @@ Zeitpunkte zählen als *Überschreitung*.
   Treiber (snap7, node-s7, PLC4X, viele SCADA-Systeme) erwarten.
 * **Warmstart beim Download** – Variablen mit gleichem Namen und Typ sowie
   FB-Instanzen behalten ihre Werte; so lässt sich im laufenden Betrieb nachladen.
+* **Node-RED über die Manager-API statt nur über Feldprotokolle** – so stehen auch RUN/STOP,
+  Downloads, Versionen und das Audit-Log zur Verfügung, und vPLCs werden per Name statt per
+  Port angesprochen. Der Stream sendet nur Änderungen; der Manager prüft im eingestellten
+  Intervall (≥ 20 ms). Für unveränderte Flows gegen reale Steuerungen bleiben OPC UA und S7 nutzbar.
 * **Datei-Persistenz** – Versionen als JSON (inkl. SHA-256), Audit als JSON Lines.
   Austauschbar gegen PostgreSQL/Git, sobald Mandantenfähigkeit benötigt wird.
 

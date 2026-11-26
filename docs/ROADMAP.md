@@ -21,7 +21,7 @@ Schwerpunkt bleibt die **virtuelle SPS**. Die weiteren Themen bauen auf deren Ba
 |---|---|
 | **Automatische SPS-Backups** | Edge-Agent liest von realen S7-Steuerungen zyklisch Datenbausteine (snap7) und bei S7-300/400 auch Bausteine; vollständige Projektsicherung von S7-1200/1500 über TIA Portal Openness auf einer Engineering-Station. Sicherungen landen im Versionsspeicher; Wiederherstellung per Knopfdruck, auch in eine vPLC zum Testen. |
 | **Versionsverwaltung** | Heute: Versionen mit Autor, Kommentar, Hash, Diff, Rollback. Nächster Schritt: Git als Backend, Branches/Freigaben, Abgleich „Online-Stand ↔ gespeicherter Stand“ mit Alarm bei Abweichung. |
-| **PLC-Telemetrie** | OPC-UA-Subscriptions und S7-Polling → Zeitreihen-DB (TimescaleDB/InfluxDB), MQTT/Sparkplug B, Zyklus- und Zustandsdaten der vPLCs als Kennzahlen. |
+| **PLC-Telemetrie** | OPC-UA-Subscriptions und S7-Polling → Zeitreihen-DB (TimescaleDB/InfluxDB), MQTT/Sparkplug B, Zyklus- und Zustandsdaten der vPLCs als Kennzahlen. Schnellstart heute schon möglich: `vplc in` → Node-RED → InfluxDB/MQTT-Nodes. |
 
 ## Phase 3 – Engineering & DevOps
 

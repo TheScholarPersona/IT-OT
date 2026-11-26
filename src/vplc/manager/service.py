@@ -83,7 +83,11 @@ class PLCManager:
 
     # ------------------------------------------------------------ lookup
     def get(self, plc_id: str) -> VirtualPLC:
+        """Look up a PLC by id, or by name (case-insensitive) for integrations like Node-RED."""
         plc = self.plcs.get(plc_id)
+        if plc is None:
+            wanted = plc_id.strip().lower()
+            plc = next((p for p in self.plcs.values() if p.config.name.lower() == wanted), None)
         if plc is None:
             raise NotFound(f"vPLC '{plc_id}' nicht gefunden")
         return plc
@@ -139,6 +143,7 @@ class PLCManager:
 
     async def delete(self, user: str, plc_id: str) -> None:
         plc = self.get(plc_id)
+        plc_id = plc.id
         await plc.shutdown()
         del self.plcs[plc_id]
         self.store.delete_programs(plc_id)
@@ -149,6 +154,7 @@ class PLCManager:
     async def upload_program(self, user: str, plc_id: str, source: str, comment: str = "",
                              warm: bool = True) -> dict:
         plc = self.get(plc_id)
+        plc_id = plc.id
         program = compile_source(source)  # raises STError → caller reports 422
         versions = self.store.list_versions(plc_id)
         if versions and versions[-1].source == source:
@@ -163,6 +169,7 @@ class PLCManager:
 
     async def activate_version(self, user: str, plc_id: str, version: int) -> dict:
         plc = self.get(plc_id)
+        plc_id = plc.id
         pv = self.store.get_version(plc_id, version)
         if pv is None:
             raise NotFound(f"Version {version} nicht gefunden")
@@ -172,7 +179,7 @@ class PLCManager:
         return {**result, "version": pv.meta()}
 
     def diff(self, plc_id: str, a: int, b: int) -> str:
-        self.get(plc_id)
+        plc_id = self.get(plc_id).id
         va, vb = self.store.get_version(plc_id, a), self.store.get_version(plc_id, b)
         if va is None or vb is None:
             raise NotFound("Version nicht gefunden")
@@ -185,23 +192,36 @@ class PLCManager:
     # ------------------------------------------------------------ operation
     def run(self, user: str, plc_id: str) -> None:
         plc = self.get(plc_id)
+        plc_id = plc.id
         plc.run()
         self.store.audit(user, "plc.run", plc_id)
         self._persist()
 
     def stop(self, user: str, plc_id: str) -> None:
         plc = self.get(plc_id)
+        plc_id = plc.id
         plc.stop()
         self.store.audit(user, "plc.stop", plc_id)
         self._persist()
 
     def reset(self, user: str, plc_id: str) -> None:
         plc = self.get(plc_id)
+        plc_id = plc.id
         plc.reset()
         self.store.audit(user, "plc.reset", plc_id)
 
     def write_variable(self, user: str, plc_id: str, name: str, value) -> object:
         plc = self.get(plc_id)
+        plc_id = plc.id
         result = plc.write_variable(name, value)
         self.store.audit(user, "variable.write", plc_id, variable=name, value=result)
         return result
+
+    def write_variables(self, user: str, plc_id: str, values: dict) -> dict:
+        """Write several variables; all are validated first, so either all or none are written."""
+        plc = self.get(plc_id)
+        plc_id = plc.id
+        plc.validate_writes(values)
+        written = {name: plc.write_variable(name, value) for name, value in values.items()}
+        self.store.audit(user, "variable.write", plc_id, values=written)
+        return written

@@ -12,5 +12,20 @@ services:
     volumes:
       - vplc-data:/data
 
+  node-red:
+    build: ./node-red
+    restart: unless-stopped
+    depends_on:
+      - vplc
+    ports:
+      - "127.0.0.1:1880:1880"     # Node-RED-Editor – ohne adminAuth nur lokal veröffentlichen
+    environment:
+      TZ: Europe/Berlin
+      VPLC_URL: http://vplc:8080  # im Konfigurations-Node als ${VPLC_URL} verwenden
+      VPLC_API_TOKEN: ${VPLC_API_TOKEN:-}
+    volumes:
+      - node-red-data:/data
+
 volumes:
   vplc-data:
+  node-red-data:
