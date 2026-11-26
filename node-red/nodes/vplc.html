@@ -1,0 +1,284 @@
+<!-- ===================================================================== config -->
+<script type="text/javascript">
+  RED.nodes.registerType("vplc-server", {
+    category: "config",
+    defaults: {
+      name: { value: "" },
+      url: { value: "http://localhost:8080", required: true, validate: RED.validators.regex(/^(https?:\/\/.+|\$\{[A-Za-z_][A-Za-z0-9_]*\})$/i) },
+      user: { value: "node-red" },
+    },
+    credentials: { token: { type: "password" } },
+    label: function () { return this.name || this.url; },
+  });
+</script>
+
+<script type="text/html" data-template-name="vplc-server">
+  <div class="form-row">
+    <label for="node-config-input-url"><i class="fa fa-globe"></i> URL</label>
+    <input type="text" id="node-config-input-url" placeholder="http://localhost:8080">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-token"><i class="fa fa-key"></i> API-Token</label>
+    <input type="password" id="node-config-input-token" placeholder="leer, wenn ohne Token betrieben">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-user"><i class="fa fa-user"></i> Benutzer</label>
+    <input type="text" id="node-config-input-user" placeholder="node-red">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-config-input-name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="vplc-server">
+  <p>Verbindung zum IT-OT vPLC-Manager.</p>
+  <h3>Eigenschaften</h3>
+  <dl class="message-properties">
+    <dt>URL <span class="property-type">string</span></dt>
+    <dd>Adresse von REST-API und Weboberfläche, z. B. <code>http://vplc:8080</code>, oder eine Umgebungsvariable wie <code>${VPLC_URL}</code>.</dd>
+    <dt>API-Token <span class="property-type">string</span></dt>
+    <dd>Wert von <code>VPLC_API_TOKEN</code>; wird als Credential gespeichert und nicht exportiert.
+        Bleibt das Feld leer, wird die Umgebungsvariable <code>VPLC_API_TOKEN</code> des Node-RED-Prozesses verwendet.</dd>
+    <dt>Benutzer <span class="property-type">string</span></dt>
+    <dd>Name, unter dem Schreibzugriffe und Programmänderungen im Audit-Log erscheinen.</dd>
+  </dl>
+</script>
+
+<!-- shared helper: PLC picker -->
+<script type="text/javascript">
+  window.vplcSetupPlcPicker = function (node) {
+    var $plc = $("#node-input-plc");
+    var $btn = $("#node-input-plc-lookup");
+    $btn.on("click", function () {
+      var server = $("#node-input-server").val();
+      if (!server || server === "_ADD_") { RED.notify("Bitte zuerst einen vPLC-Manager auswählen", "warning"); return; }
+      $.getJSON("vplc/plcs/" + encodeURIComponent(server)).done(function (plcs) {
+        if (!plcs.length) { RED.notify("Keine vPLC auf diesem Manager gefunden", "warning"); return; }
+        var menu = RED.popover.menu({
+          options: plcs.map(function (p) {
+            return { label: p.name + " (" + p.mode + (p.program ? ", " + p.program : "") + ")", value: p.name };
+          }),
+          onselect: function (item) { $plc.val(item.value).trigger("change"); menu.hide(); },
+        });
+        menu.show({ target: $btn, align: "right", offset: [0, 0] });
+      }).fail(function (xhr) {
+        RED.notify("vPLC-Liste nicht abrufbar: " + ((xhr.responseJSON && xhr.responseJSON.error) || xhr.statusText), "error");
+      });
+    });
+  };
+</script>
+
+<!-- ===================================================================== vplc in -->
+<script type="text/javascript">
+  RED.nodes.registerType("vplc in", {
+    category: "vPLC",
+    color: "#7fb7df",
+    defaults: {
+      name: { value: "" },
+      server: { value: "", type: "vplc-server", required: true },
+      plc: { value: "", required: true },
+      variables: { value: "" },
+      output: { value: "each" },
+      interval: { value: 100, validate: RED.validators.number() },
+      initial: { value: true },
+    },
+    inputs: 0,
+    outputs: 1,
+    icon: "vplc.svg",
+    label: function () { return this.name || (this.plc ? this.plc + (this.variables ? ": " + this.variables : "") : "vplc in"); },
+    paletteLabel: "vplc in",
+    oneditprepare: function () { window.vplcSetupPlcPicker(this); },
+  });
+</script>
+
+<script type="text/html" data-template-name="vplc in">
+  <div class="form-row">
+    <label for="node-input-server"><i class="fa fa-server"></i> Manager</label>
+    <input type="text" id="node-input-server">
+  </div>
+  <div class="form-row">
+    <label for="node-input-plc"><i class="fa fa-microchip"></i> vPLC</label>
+    <input type="text" id="node-input-plc" placeholder="Name oder ID" style="width: calc(70% - 40px)">
+    <button type="button" id="node-input-plc-lookup" class="red-ui-button" title="vPLC auswählen"><i class="fa fa-search"></i></button>
+  </div>
+  <div class="form-row">
+    <label for="node-input-variables"><i class="fa fa-list"></i> Variablen</label>
+    <input type="text" id="node-input-variables" placeholder="leer = alle, sonst z. B. Fuellstand, Pumpe">
+  </div>
+  <div class="form-row">
+    <label for="node-input-output"><i class="fa fa-sign-out"></i> Ausgabe</label>
+    <select id="node-input-output">
+      <option value="each">eine Nachricht je geänderter Variable</option>
+      <option value="object">ein Objekt mit allen Änderungen</option>
+      <option value="all">ein Objekt mit allen aktuellen Werten</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-interval"><i class="fa fa-clock-o"></i> Intervall</label>
+    <input type="number" id="node-input-interval" min="20" style="width: 90px"> ms
+  </div>
+  <div class="form-row">
+    <label>&nbsp;</label>
+    <input type="checkbox" id="node-input-initial" style="width: auto; margin: 0 6px 0 0">
+    <label for="node-input-initial" style="width: auto">Beim Verbinden aktuelle Werte senden</label>
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="vplc in">
+  <p>Meldet Variablenänderungen einer vPLC in Echtzeit (WebSocket, mit automatischer Wiederverbindung).</p>
+  <h3>Ausgabe</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">boolean | number | object</span></dt>
+    <dd>Je nach Einstellung der Wert einer Variable oder ein Objekt <code>{Name: Wert}</code>.</dd>
+    <dt>topic <span class="property-type">string</span></dt>
+    <dd>Variablenname (Ausgabe „je Variable“) bzw. Name der vPLC.</dd>
+    <dt>plc, mode <span class="property-type">string</span></dt>
+    <dd>Name der vPLC und Betriebszustand (<code>RUN</code>/<code>STOP</code>).</dd>
+    <dt>initial <span class="property-type">boolean</span></dt>
+    <dd><code>true</code> für die Werte direkt nach dem Verbinden oder nach einem Programm-Download.</dd>
+  </dl>
+  <h3>Details</h3>
+  <p>Werte werden nur gesendet, wenn sie sich ändern. Das <i>Intervall</i> bestimmt, wie oft der Manager prüft
+     (Minimum 20 ms). Der Node-Status zeigt Betriebszustand, Programm und Version.</p>
+</script>
+
+<!-- ===================================================================== vplc out -->
+<script type="text/javascript">
+  RED.nodes.registerType("vplc out", {
+    category: "vPLC",
+    color: "#7fb7df",
+    defaults: {
+      name: { value: "" },
+      server: { value: "", type: "vplc-server", required: true },
+      plc: { value: "" },
+      variable: { value: "" },
+    },
+    inputs: 1,
+    outputs: 0,
+    icon: "vplc.svg",
+    align: "right",
+    label: function () { return this.name || (this.plc ? this.plc + (this.variable ? "." + this.variable : "") : "vplc out"); },
+    paletteLabel: "vplc out",
+    oneditprepare: function () { window.vplcSetupPlcPicker(this); },
+  });
+</script>
+
+<script type="text/html" data-template-name="vplc out">
+  <div class="form-row">
+    <label for="node-input-server"><i class="fa fa-server"></i> Manager</label>
+    <input type="text" id="node-input-server">
+  </div>
+  <div class="form-row">
+    <label for="node-input-plc"><i class="fa fa-microchip"></i> vPLC</label>
+    <input type="text" id="node-input-plc" placeholder="Name oder ID (leer = msg.plc)" style="width: calc(70% - 40px)">
+    <button type="button" id="node-input-plc-lookup" class="red-ui-button" title="vPLC auswählen"><i class="fa fa-search"></i></button>
+  </div>
+  <div class="form-row">
+    <label for="node-input-variable"><i class="fa fa-pencil"></i> Variable</label>
+    <input type="text" id="node-input-variable" placeholder="leer = msg.topic oder Objekt in msg.payload">
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="vplc out">
+  <p>Schreibt Variablen einer vPLC. Jeder Schreibzugriff erscheint im Audit-Log.</p>
+  <h3>Eingabe</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">boolean | number | string | object</span></dt>
+    <dd>Neuer Wert. Ein Objekt <code>{Name: Wert, …}</code> schreibt mehrere Variablen auf einmal –
+        entweder alle oder keine (bei einem Fehler wird nichts geschrieben).</dd>
+    <dt class="optional">topic <span class="property-type">string</span></dt>
+    <dd>Variablenname, wenn im Node keiner eingetragen ist.</dd>
+    <dt class="optional">plc <span class="property-type">string</span></dt>
+    <dd>vPLC, wenn im Node keine eingetragen ist.</dd>
+  </dl>
+  <h3>Details</h3>
+  <p>Im RUN übernimmt die vPLC den Wert zu Beginn des nächsten Zyklus. Fehler (unbekannte Variable,
+     Konstante, ungültiger Wert) können mit einem <i>catch</i>-Node abgefangen werden.</p>
+</script>
+
+<!-- ===================================================================== vplc control -->
+<script type="text/javascript">
+  RED.nodes.registerType("vplc control", {
+    category: "vPLC",
+    color: "#7fb7df",
+    defaults: {
+      name: { value: "" },
+      server: { value: "", type: "vplc-server", required: true },
+      plc: { value: "" },
+      action: { value: "status" },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "vplc.svg",
+    label: function () {
+      var labels = { run: "RUN", stop: "STOP", reset: "Kaltstart", status: "Status", read: "Variablen lesen",
+        download: "Programm laden", check: "Programm prüfen", versions: "Versionen", activate: "Version aktivieren", msg: "msg.action" };
+      return this.name || ((this.plc ? this.plc + ": " : "") + (labels[this.action] || this.action));
+    },
+    paletteLabel: "vplc control",
+    oneditprepare: function () { window.vplcSetupPlcPicker(this); },
+  });
+</script>
+
+<script type="text/html" data-template-name="vplc control">
+  <div class="form-row">
+    <label for="node-input-server"><i class="fa fa-server"></i> Manager</label>
+    <input type="text" id="node-input-server">
+  </div>
+  <div class="form-row">
+    <label for="node-input-plc"><i class="fa fa-microchip"></i> vPLC</label>
+    <input type="text" id="node-input-plc" placeholder="Name oder ID (leer = msg.plc)" style="width: calc(70% - 40px)">
+    <button type="button" id="node-input-plc-lookup" class="red-ui-button" title="vPLC auswählen"><i class="fa fa-search"></i></button>
+  </div>
+  <div class="form-row">
+    <label for="node-input-action"><i class="fa fa-cog"></i> Aktion</label>
+    <select id="node-input-action">
+      <option value="status">Status abfragen</option>
+      <option value="read">Alle Variablen lesen</option>
+      <option value="run">RUN</option>
+      <option value="stop">STOP</option>
+      <option value="reset">Kaltstart</option>
+      <option value="download">Programm laden (msg.payload)</option>
+      <option value="check">Programm prüfen (msg.payload)</option>
+      <option value="versions">Versionen auflisten</option>
+      <option value="activate">Version aktivieren (msg.payload)</option>
+      <option value="msg">aus msg.action</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="vplc control">
+  <p>Steuert eine vPLC: Betriebszustand, Programme und Versionen.</p>
+  <h3>Eingabe</h3>
+  <dl class="message-properties">
+    <dt class="optional">payload <span class="property-type">string | number</span></dt>
+    <dd>Programmtext (Structured Text) für <i>Programm laden/prüfen</i>, Versionsnummer für <i>Version aktivieren</i>.</dd>
+    <dt class="optional">comment <span class="property-type">string</span></dt>
+    <dd>Änderungskommentar beim Laden eines Programms.</dd>
+    <dt class="optional">warm <span class="property-type">boolean</span></dt>
+    <dd><code>false</code> = Variablenwerte beim Laden nicht übernehmen.</dd>
+    <dt class="optional">action <span class="property-type">string</span></dt>
+    <dd>Aktion bei Einstellung „aus msg.action“: <code>run</code>, <code>stop</code>, <code>reset</code>,
+        <code>status</code>, <code>read</code>, <code>download</code>, <code>check</code>, <code>versions</code>, <code>activate</code>.</dd>
+  </dl>
+  <h3>Ausgabe</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">object</span></dt>
+    <dd>Antwort des Managers, z. B. der Status oder <code>{Name: Wert}</code> bei <i>Variablen lesen</i>.</dd>
+    <dt class="optional">errors <span class="property-type">array</span></dt>
+    <dd>Bei Compilerfehlern die Liste mit Zeile, Spalte und Meldung (Fehler wird zusätzlich an <i>catch</i> gemeldet).</dd>
+  </dl>
+</script>

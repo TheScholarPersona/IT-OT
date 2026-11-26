@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IT-OT vPLC Manager</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">▣</span> IT-OT <strong>vPLC</strong></div>
+  <div class="topbar-right">
+    <label>Benutzer <input id="user" type="text" placeholder="Name" maxlength="64"></label>
+    <label id="token-label" hidden>Token <input id="token" type="password" autocomplete="off"></label>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <h2>Virtuelle SPSen</h2>
+      <button id="btn-new" class="primary small">+ Neu</button>
+    </div>
+    <ul id="plc-list" class="plc-list"></ul>
+    <p id="plc-empty" class="muted">Noch keine vPLC angelegt.</p>
+  </aside>
+
+  <main id="main">
+    <section id="welcome" class="card welcome">
+      <h1>Virtuelle SPS in Minuten</h1>
+      <p>Lege eine vPLC an, lade ein Structured-Text-Programm (IEC 61131-3) und verbinde
+         HMI, SCADA oder Testwerkzeuge über <strong>S7comm</strong> oder <strong>OPC UA</strong>.</p>
+      <button id="btn-new-2" class="primary">Erste vPLC anlegen</button>
+    </section>
+
+    <section id="detail" hidden>
+      <div class="detail-head card">
+        <div>
+          <h1 id="d-name"></h1>
+          <div class="meta">
+            <span id="d-mode" class="badge"></span>
+            <span id="d-program" class="muted"></span>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="btn-run" class="run">▶ RUN</button>
+          <button id="btn-stop" class="stop">■ STOP</button>
+          <button id="btn-reset" title="Kaltstart: alle Werte auf Initialwerte">↺ Kaltstart</button>
+          <button id="btn-delete" class="danger" title="vPLC löschen">Löschen</button>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="card stat"><div class="stat-label">Zyklen</div><div id="s-scans" class="stat-value">–</div></div>
+        <div class="card stat"><div class="stat-label">Zykluszeit Ø / max</div><div id="s-cycle" class="stat-value">–</div></div>
+        <div class="card stat"><div class="stat-label">Überschreitungen</div><div id="s-overruns" class="stat-value">–</div></div>
+      </div>
+
+      <div class="card conn">
+        <div><span class="conn-label">S7comm</span> <code id="c-s7"></code></div>
+        <div><span class="conn-label">OPC UA</span> <code id="c-ua"></code></div>
+      </div>
+
+      <div id="d-error" class="alert" hidden></div>
+
+      <nav class="tabs" role="tablist">
+        <button data-tab="program" class="active">Programm</button>
+        <button data-tab="variables">Variablen</button>
+        <button data-tab="versions">Versionen</button>
+        <button data-tab="diagnostics">Diagnose</button>
+        <button data-tab="audit">Audit-Log</button>
+      </nav>
+
+      <div class="tab card" id="tab-program">
+        <div class="toolbar">
+          <select id="example-select"><option value="">Beispiel laden …</option></select>
+          <input id="commit-msg" type="text" placeholder="Änderungskommentar (z. B. „Gelbphase verlängert“)" maxlength="500">
+          <label class="check"><input id="warm" type="checkbox" checked> Werte übernehmen</label>
+          <button id="btn-check">Prüfen</button>
+          <button id="btn-download" class="primary">In vPLC laden</button>
+        </div>
+        <div class="editor">
+          <pre id="gutter" class="gutter" aria-hidden="true"></pre>
+          <textarea id="source" spellcheck="false" wrap="off"></textarea>
+        </div>
+        <ul id="errors" class="errors"></ul>
+      </div>
+
+      <div class="tab card" id="tab-variables" hidden>
+        <div class="toolbar">
+          <input id="var-filter" type="search" placeholder="Variablen filtern …">
+          <label class="check"><input id="show-fb" type="checkbox"> FB-Instanzen anzeigen</label>
+        </div>
+        <div class="table-wrap">
+          <table class="vars">
+            <thead><tr><th>Name</th><th>Typ</th><th>Bereich</th><th>Wert</th><th>S7-Adresse</th><th>OPC-UA-Knoten</th><th></th></tr></thead>
+            <tbody id="var-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab card" id="tab-versions" hidden>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Version</th><th>Zeitpunkt</th><th>Autor</th><th>Kommentar</th><th>SHA-256</th><th></th></tr></thead>
+            <tbody id="ver-body"></tbody>
+          </table>
+        </div>
+        <pre id="diff" class="diff" hidden></pre>
+      </div>
+
+      <div class="tab card" id="tab-diagnostics" hidden>
+        <h3>Diagnosepuffer</h3>
+        <ul id="diag" class="diag"></ul>
+      </div>
+
+      <div class="tab card" id="tab-audit" hidden>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Zeitpunkt</th><th>Benutzer</th><th>Aktion</th><th>Details</th></tr></thead>
+            <tbody id="audit-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="dlg-new">
+  <form method="dialog" id="form-new">
+    <h2>Neue vPLC</h2>
+    <label>Name <input name="name" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9 _.\-]*" placeholder="z. B. Linie1-Presse"></label>
+    <div class="row">
+      <label>Zykluszeit (ms) <input name="cycle_ms" type="number" value="10" min="1" max="10000"></label>
+      <label>Zyklusüberwachung (ms) <input name="watchdog_ms" type="number" value="200" min="1" max="60000"></label>
+    </div>
+    <div class="row">
+      <label class="check"><input name="s7_enabled" type="checkbox" checked> S7comm-Server</label>
+      <label class="check"><input name="opcua_enabled" type="checkbox" checked> OPC-UA-Server</label>
+    </div>
+    <p class="muted">Ports werden automatisch vergeben (S7 ab 10102, OPC UA ab 4840).</p>
+    <p id="new-error" class="error-text" hidden></p>
+    <div class="dialog-actions">
+      <button value="cancel" formnovalidate>Abbrechen</button>
+      <button id="btn-create" value="create" class="primary">Anlegen</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
