@@ -1,0 +1,16 @@
+services:
+  vplc:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"     # Weboberfläche/REST – nur lokal, davor Reverse-Proxy mit TLS
+      - "10102-10111:10102-10111" # S7comm (Port 102 im Container nicht ohne Root möglich)
+      - "4840-4849:4840-4849"     # OPC UA
+    environment:
+      # Ohne Token ist die API offen. Für jeden Netzwerkbetrieb setzen!
+      VPLC_API_TOKEN: ${VPLC_API_TOKEN:-}
+    volumes:
+      - vplc-data:/data
+
+volumes:
+  vplc-data:
