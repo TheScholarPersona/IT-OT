@@ -23,9 +23,13 @@ features:
       - id: arrays
         kind: effekt
         text: Arrays sind ein Knoten mit Array-Wert; ein von außen geschriebenes Array wirkt auf das Programm.
+      - id: strukturen
+        kind: effekt
+        text: Strukturen sind Ordner mit Knoten je Feld (`Ziel.X`, `Faecher[1].Historie`); STRINGs sind String-Knoten; geschriebene Felder wirken auf das Programm.
     evidence:
       - { kind: integration, file: tests/test_runtime_protocols.py, test: test_opcua_read_write, covers: [schreiben-wirkt, konstante-geschuetzt] }
       - { kind: integration, file: tests/test_arrays_protocols.py, test: test_arrays_over_opcua, covers: [arrays] }
+      - { kind: integration, file: tests/test_structs_strings.py, test: test_structs_and_strings_over_opcua, covers: [strukturen] }
     comparisons: { themenliste: vplc }
 
   - id: opcua.status-knoten

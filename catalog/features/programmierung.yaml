@@ -342,3 +342,66 @@ features:
       - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_recursion_and_self_containing_function_blocks_are_rejected, covers: [rekursion] }
       - { kind: unit, file: tests/test_st_pou_arrays.py, test: test_pou_declaration_errors, covers: [deklaration] }
     comparisons: { themenliste: vplc }
+
+  - id: programmierung.strings
+    title: Zeichenketten (STRING)
+    group: programmierung.sprache
+    summary: STRING und STRING[n] mit IEC-Escapes, Vergleichen, den Standard-Stringfunktionen und Umwandlungen in beide Richtungen.
+    usage:
+      - channel: entwicklung
+        text: "`Meldung : STRING[60] := 'Bereit';` – `CONCAT`, `LEN`, `LEFT`, `RIGHT`, `MID`, `FIND`, `INSERT`, `DELETE`, `REPLACE`, `INT_TO_STRING`, `STRING_TO_REAL` …"
+    rules:
+      - Zu lange Texte werden auf die deklarierte Länge gekürzt (Standard 254 Zeichen, wie bei S7).
+      - Positionen beginnen bei 1; die Reihenfolge der Parameter folgt IEC 61131-3 (z. B. `MID(IN, L, P)`).
+      - Ungültige Positionen und nicht lesbare Zahlen sind Laufzeitfehler.
+    technical:
+      components: [src/vplc/types.py, src/vplc/st/lexer.py, src/vplc/st/stdlib.py]
+    acceptance:
+      - id: funktionen
+        kind: effekt
+        text: Escapes, Kürzen auf STRING[8], LEN, FIND, LEFT, RIGHT, MID, INSERT, DELETE, REPLACE, CONCAT und Vergleiche liefern die erwarteten Werte.
+      - id: umwandlung
+        kind: effekt
+        text: Zahlen und BOOL werden in Text umgewandelt und Text in Zahlen (auch mit Komma).
+      - id: fehler
+        kind: regel
+        text: Position 0 bei MID, ein nicht lesbarer Zahltext, eine Länge über 254 und Text in doppelten Anführungszeichen werden gemeldet.
+    evidence:
+      - { kind: unit, file: tests/test_structs_strings.py, test: test_strings_literals_escapes_length_and_functions, covers: [funktionen] }
+      - { kind: unit, file: tests/test_structs_strings.py, test: test_string_conversions_both_ways, covers: [umwandlung] }
+      - { kind: unit, file: tests/test_structs_strings.py, test: test_string_errors, covers: [fehler] }
+    comparisons: { themenliste: vplc }
+
+  - id: programmierung.strukturen
+    title: Strukturen (STRUCT / UDT)
+    group: programmierung.sprache
+    summary: Eigene Datentypen mit Feldern und Startwerten – verschachtelt, mit Array-Feldern und als Arrays von Strukturen.
+    description: |
+      Strukturen werden in einem TYPE-Block im selben Quelltext deklariert. Zugriff über Pfade wie
+      `Faecher[i].Ort.X`; ganze Strukturen lassen sich gleichartigen Strukturen zuweisen (Kopie).
+      Beim Nachladen im RUN bleiben Werte erhalten, solange sich der Aufbau der Struktur nicht ändert.
+    usage:
+      - channel: entwicklung
+        text: "`TYPE Fach : STRUCT Menge : INT := 1; Ort : Position; END_STRUCT; END_TYPE` – Zugriff `Faecher[i].Menge`."
+      - channel: api
+        text: "Werte als JSON-Objekt mit den deklarierten Feldnamen; Schreiben einzelner Felder (`Ziel.X`) oder teilweise (`{\"X\": 1}`)."
+    rules:
+      - Startwerte kommen aus der Typdeklaration; Strukturen als Baustein-Ein-/Ausgang oder Rückgabewert sind noch nicht möglich.
+      - Eine Struktur darf sich nicht selbst enthalten.
+    technical:
+      components: [src/vplc/datatypes.py, src/vplc/st/parser.py, src/vplc/st/compiler.py]
+    acceptance:
+      - id: verschachtelt
+        kind: effekt
+        text: Feld-Startwerte, verschachtelte Strukturen, Array-Felder und Arrays von Strukturen lassen sich lesen und schreiben; Zuweisungen kopieren.
+      - id: fehler
+        kind: regel
+        text: Selbstbezug, Struktur als Baustein-Eingang oder Rückgabewert, Initialwert an der Variable, unbekannte Felder, fehlendes Feld und ungleiche Strukturen werden gemeldet.
+      - id: warmstart
+        kind: effekt
+        text: Beim Nachladen bleiben Strukturwerte erhalten; ändert sich der Aufbau, beginnt die Variable neu.
+    evidence:
+      - { kind: unit, file: tests/test_structs_strings.py, test: test_structs_with_defaults_nesting_and_arrays_of_structs, covers: [verschachtelt] }
+      - { kind: unit, file: tests/test_structs_strings.py, test: test_struct_errors, covers: [fehler] }
+      - { kind: unit, file: tests/test_structs_strings.py, test: test_warm_restart_keeps_structs_with_unchanged_layout, covers: [warmstart] }
+    comparisons: { themenliste: vplc }

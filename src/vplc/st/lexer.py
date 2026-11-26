@@ -9,7 +9,7 @@ from .errors import STSyntaxError
 
 KEYWORDS = {
     "PROGRAM", "END_PROGRAM", "FUNCTION", "END_FUNCTION", "FUNCTION_BLOCK", "END_FUNCTION_BLOCK",
-    "ARRAY", "VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_IN_OUT",
+    "ARRAY", "TYPE", "END_TYPE", "STRUCT", "END_STRUCT", "VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_IN_OUT",
     "VAR_TEMP", "END_VAR", "CONSTANT", "RETAIN",
     "IF", "THEN", "ELSIF", "ELSE", "END_IF",
     "CASE", "OF", "END_CASE",
@@ -38,6 +38,8 @@ class Token:
 _TOKEN_RE = re.compile(
     r"""
     (?P<ws>[ \t\r\n]+)
+  | (?P<string>'(?:\$.|[^'$\n])*')
+  | (?P<dstring>"[^"\n]*")
   | (?P<comment>\(\*.*?\*\)|//[^\n]*)
   | (?P<time>(?i:TIME|T)\#-?[0-9_.a-zA-Z]+)
   | (?P<based>(?:2|8|16)\#[0-9a-fA-F_]+)
@@ -70,6 +72,30 @@ def parse_time_literal(text: str, line: int, col: int) -> int:
     return sign * int(round(total))
 
 
+_ESCAPES = {"$": "$", "'": "'", "L": "\n", "N": "\n", "P": "\f", "R": "\r", "T": "\t"}
+
+
+def _unescape(body: str, line: int, col: int) -> str:
+    """IEC string escapes: $$ $' $L $N $P $R $T and $hh (two hex digits)."""
+    out, i = [], 0
+    while i < len(body):
+        ch = body[i]
+        if ch != "$":
+            out.append(ch)
+            i += 1
+            continue
+        nxt = body[i + 1: i + 2].upper()
+        if nxt in _ESCAPES:
+            out.append(_ESCAPES[nxt])
+            i += 2
+        elif re.fullmatch(r"[0-9A-Fa-f]{2}", body[i + 1: i + 3]):
+            out.append(chr(int(body[i + 1: i + 3], 16)))
+            i += 3
+        else:
+            raise STSyntaxError(f"Ungültige Escape-Sequenz '${body[i + 1: i + 2]}' in Zeichenkette", line, col + i + 1)
+    return "".join(out)
+
+
 def tokenize(source: str) -> list[Token]:
     tokens: list[Token] = []
     pos, line, line_start = 0, 1, 0
@@ -83,7 +109,12 @@ def tokenize(source: str) -> list[Token]:
             raise STSyntaxError(f"Unerwartetes Zeichen '{source[pos]}'", line, col)
         kind = m.lastgroup
         text = m.group()
-        if kind == "time":
+        if kind == "string":
+            tokens.append(Token("STRING", _unescape(text[1:-1], line, col), line, col, text))
+        elif kind == "dstring":
+            raise STSyntaxError("Doppelte Anführungszeichen (WSTRING oder SCL-Namen) werden noch nicht unterstützt; "
+                                "Zeichenketten in ' ' schreiben", line, col)
+        elif kind == "time":
             tokens.append(Token("TIME", parse_time_literal(text, line, col), line, col, text))
         elif kind == "based":
             base, digits = text.split("#")

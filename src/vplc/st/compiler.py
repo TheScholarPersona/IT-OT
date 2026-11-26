@@ -20,6 +20,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Callable
 
+from ..datatypes import (ArrayType, DataType, Elementary, StructField, StructType, is_elementary,
+                         same_layout)
 from ..types import IecType, coerce, get_type
 from . import ast
 from .errors import PLCRuntimeError, STCompileError, STError, STSemanticError
@@ -48,14 +50,27 @@ class _Return(Exception):
 @dataclass
 class Variable:
     name: str
-    type: IecType  # element type for arrays
+    dtype: DataType
     section: str
     constant: bool = False
     retain: bool = False
     init: object = None
     value: object = None
     line: int = 0
-    dims: tuple[int, int] | None = None  # (low, high) for ARRAY[low..high] OF type
+
+    # -- compatibility helpers for elementary values and arrays of elementary values
+    @property
+    def type(self) -> IecType | None:
+        """Elementary type (element type for arrays of elementary values), else None."""
+        if isinstance(self.dtype, Elementary):
+            return self.dtype.iec
+        if isinstance(self.dtype, ArrayType) and isinstance(self.dtype.elem, Elementary):
+            return self.dtype.elem.iec
+        return None
+
+    @property
+    def dims(self) -> tuple[int, int] | None:
+        return (self.dtype.low, self.dtype.high) if isinstance(self.dtype, ArrayType) else None
 
     @property
     def writable(self) -> bool:
@@ -63,40 +78,39 @@ class Variable:
 
     @property
     def is_array(self) -> bool:
-        return self.dims is not None
+        return isinstance(self.dtype, ArrayType)
+
+    @property
+    def is_elementary(self) -> bool:
+        return isinstance(self.dtype, Elementary)
 
     @property
     def length(self) -> int:
-        return self.dims[1] - self.dims[0] + 1 if self.dims else 1
+        return self.dtype.length if self.is_array else 1
 
     @property
     def type_label(self) -> str:
-        if self.dims:
-            return f"ARRAY[{self.dims[0]}..{self.dims[1]}] OF {self.type.name}"
-        return self.type.name
+        return self.dtype.label
 
     def same_shape(self, other: "Variable") -> bool:
-        return self.type == other.type and self.dims == other.dims
+        return same_layout(self.dtype, other.dtype)
 
     def coerce(self, value):
-        """Convert an external value (scalar, or list for arrays) to this variable's type."""
-        if self.dims is None:
-            return coerce(self.type, value)
-        if not isinstance(value, (list, tuple)) or len(value) != self.length:
-            raise ValueError(f"{self.type_label} erwartet eine Liste mit {self.length} Werten")
-        return [coerce(self.type, v) for v in value]
+        """Convert an external value (scalar, list for arrays, dict for structs) to this type."""
+        return self.dtype.coerce(value, self.value)
 
     def element_index(self, index: int) -> int:
-        low, high = self.dims
-        if not low <= index <= high:
-            raise IndexError(f"Index {index} außerhalb von {self.name}[{low}..{high}]")
-        return index - low
+        return self.dtype.position(index, self.name)
 
     def reset(self) -> None:
-        self.value = list(self.init) if self.dims else self.init
+        self.value = self.dtype.copy(self.init)
 
     def snapshot(self):
-        return list(self.value) if self.dims else self.value
+        return self.dtype.copy(self.value)
+
+    def display(self):
+        """Value for JSON consumers: copies, struct fields with their declared names."""
+        return self.dtype.display(self.value)
 
 
 @dataclass
@@ -246,6 +260,8 @@ class CompiledProgram:
             pass
         except RecursionError:
             raise PLCRuntimeError("Ausdruck zu tief verschachtelt") from None
+        except TypeError as e:  # e.g. comparing a STRING with a number
+            raise PLCRuntimeError(f"Typfehler: {e}") from None
 
     def tick(self, line: int) -> None:
         self._ticks += 1
@@ -272,6 +288,9 @@ class Unit:
         self.fn_decls: dict[str, ast.FunctionDecl] = {}
         self.fb_classes: dict[str, type[UserFunctionBlock]] = {}
         self.functions: dict[str, CompiledFunction] = {}
+        self.type_decls: dict[str, ast.TypeDecl] = {}
+        self.struct_types: dict[str, StructType] = {}
+        self.resolving_types: list[str] = []
         self.instantiating: list[str] = []  # FB types being instantiated (recursion check)
         self.compiling_functions: list[str] = []
 
@@ -280,11 +299,19 @@ class Unit:
 
     # ------------------------------------------------------------ declarations
     def register(self) -> None:
+        for td in self.ast.types:
+            key = td.name.upper()
+            if key in FUNCTION_BLOCKS or get_type(key) or key in FUNCTIONS:
+                self.err(f"'{td.name}' ist ein reservierter Name", td)
+            elif key in self.type_decls:
+                self.err(f"Typ '{td.name}' ist bereits deklariert", td)
+            else:
+                self.type_decls[key] = td
         for fb in self.ast.function_blocks:
             key = fb.name.upper()
             if key in FUNCTION_BLOCKS or get_type(key) or key in FUNCTIONS:
                 self.err(f"'{fb.name}' ist ein reservierter Name", fb)
-            elif key in self.fb_decls or key in self.fn_decls:
+            elif key in self.fb_decls or key in self.fn_decls or key in self.type_decls:
                 self.err(f"'{fb.name}' ist bereits deklariert", fb)
             else:
                 self.fb_decls[key] = fb
@@ -292,10 +319,30 @@ class Unit:
             key = fn.name.upper()
             if key in FUNCTIONS or key in FUNCTION_BLOCKS or get_type(key):
                 self.err(f"'{fn.name}' ist ein reservierter Name", fn)
-            elif key in self.fb_decls or key in self.fn_decls:
+            elif key in self.fb_decls or key in self.fn_decls or key in self.type_decls:
                 self.err(f"'{fn.name}' ist bereits deklariert", fn)
             else:
                 self.fn_decls[key] = fn
+
+    def struct_type(self, key: str, where: ast.Node) -> StructType | None:
+        st = self.struct_types.get(key)
+        if st is not None:
+            return st
+        decl = self.type_decls[key]
+        if key in self.resolving_types:
+            loop = self.resolving_types[self.resolving_types.index(key):] + [key]
+            self.err(f"Struktur enthält sich selbst ({' → '.join(self.type_decls[k].name for k in loop)})", where)
+            return None
+        self.resolving_types.append(key)
+        try:
+            pou = PouCompiler(self, "TYPE", decl.name)
+            pou.declare(decl.fields)
+            fields = tuple(StructField(k, v.name, v.dtype, v.init) for k, v in pou.variables.items())
+            st = StructType(decl.name, fields)
+            self.struct_types[key] = st
+            return st
+        finally:
+            self.resolving_types.pop()
 
     def fb_class(self, key: str) -> type[UserFunctionBlock]:
         cls = self.fb_classes.get(key)
@@ -343,10 +390,14 @@ class Unit:
         try:
             rtype = get_type(decl.return_type)
             if rtype is None:
-                self.err(f"Unbekannter Rückgabetyp '{decl.return_type}'", decl)
+                if decl.return_type in self.type_decls:
+                    self.err("Strukturen als Rückgabewert werden noch nicht unterstützt", decl)
+                else:
+                    self.err(f"Unbekannter Rückgabetyp '{decl.return_type}'", decl)
                 rtype = get_type("INT")
             pou = PouCompiler(self, "FUNCTION", decl.name)
-            result = Variable(decl.name, rtype, "RESULT", init=rtype.default, value=rtype.default, line=decl.line)
+            result = Variable(decl.name, Elementary(rtype), "RESULT", init=rtype.default, value=rtype.default,
+                              line=decl.line)
             pou.variables[key] = result
             pou.declare(decl.decls)
             inputs = [k for k, v in pou.variables.items() if v.section == "VAR_INPUT"]
@@ -363,7 +414,10 @@ class Unit:
         pou = PouCompiler(self, "PROGRAM", self.ast.name)
         pou.declare(self.ast.decls)
         body = [pou.stmt(s) for s in self.ast.body]
-        # check POUs that the program never uses
+        # check types and POUs that the program never uses
+        for key, decl in self.type_decls.items():
+            if key not in self.struct_types:
+                self.struct_type(key, decl)
         for key in self.fn_decls:
             if key not in self.functions:
                 self.function(key, self.fn_decls[key])
@@ -412,29 +466,25 @@ class PouCompiler:
             if d.type_name in FUNCTION_BLOCKS or d.type_name in self.unit.fb_decls:
                 self.declare_fb(d, key)
                 continue
-            t = get_type(d.type_name)
-            if t is None:
-                hint = " (Funktionen werden aufgerufen, nicht deklariert)" if d.type_name in self.unit.fn_decls else ""
-                self.err(f"Unbekannter Datentyp '{d.type_name}'{hint}", d)
+            dtype = self.resolve_dtype(d)
+            if dtype is None:
                 continue
-            dims = None
-            if d.dims is not None:
-                dims = self.array_dims(d)
-                if dims is None:
-                    continue
-                if d.section in ("VAR_INPUT", "VAR_OUTPUT") and self.kind != "PROGRAM":
-                    self.err("Arrays als Ein- oder Ausgang von Bausteinen werden noch nicht unterstützt", d)
-                    continue
-            init = self.initial_value(d, t, dims)
+            if not is_elementary(dtype) and (
+                    (d.section in ("VAR_INPUT", "VAR_OUTPUT") and self.kind != "PROGRAM")):
+                self.err("Arrays und Strukturen als Ein- oder Ausgang von Bausteinen werden noch nicht unterstützt", d)
+                continue
+            init = self.initial_value(d, dtype)
             if init is None:  # error already reported; declare anyway to avoid follow-up errors
-                init = [t.default] * (dims[1] - dims[0] + 1) if dims else t.default
+                init = dtype.default()
             self.variables[key] = Variable(
-                d.name, t, d.section, d.constant, d.retain, init,
-                list(init) if dims else init, d.line, dims)
+                d.name, dtype, d.section, d.constant, d.retain, init, dtype.copy(init), d.line)
 
     def declare_fb(self, d: ast.VarDecl, key: str) -> None:
         if self.kind == "FUNCTION":
             self.err("In Funktionen sind keine Funktionsbaustein-Instanzen erlaubt", d)
+            return
+        if self.kind == "TYPE":
+            self.err("Strukturen können keine Funktionsbausteine enthalten", d)
             return
         if d.init is not None:
             self.err("Funktionsbaustein-Instanzen können nicht initialisiert werden", d)
@@ -449,6 +499,27 @@ class PouCompiler:
         block = self.unit.instantiate_fb(d.type_name, d)
         if block is not None:
             self.fbs[key] = FBInstance(d.name, block, d.line)
+
+    def resolve_dtype(self, d: ast.VarDecl) -> DataType | None:
+        """Data type of a declaration: elementary, STRING[n], STRUCT type, ARRAY of those."""
+        t = get_type(d.type_name)
+        if t is not None:
+            base: DataType | None = Elementary(t)
+        elif d.type_name in self.unit.type_decls:
+            base = self.unit.struct_type(d.type_name, d)
+            if base is None:
+                return None
+        else:
+            if d.type_name.startswith("STRING["):
+                self.err(f"Ungültige Länge in '{d.type_name}' (1 … 254)", d)
+            else:
+                hint = " (Funktionen werden aufgerufen, nicht deklariert)" if d.type_name in self.unit.fn_decls else ""
+                self.err(f"Unbekannter Datentyp '{d.type_name}'{hint}", d)
+            return None
+        if d.dims is None:
+            return base
+        dims = self.array_dims(d)
+        return None if dims is None else ArrayType(base, *dims)
 
     def array_dims(self, d: ast.VarDecl) -> tuple[int, int] | None:
         try:
@@ -467,8 +538,15 @@ class PouCompiler:
             return None
         return low, high
 
-    def initial_value(self, d: ast.VarDecl, t: IecType, dims):
-        if dims is None:
+    def initial_value(self, d: ast.VarDecl, dtype: DataType):
+        """Initial value from the declaration, or None after reporting an error."""
+        if isinstance(dtype, StructType):
+            if d.init is not None:
+                self.err(f"Strukturvariablen erhalten ihre Startwerte aus der Typdeklaration von {dtype.name}", d.init)
+                return None
+            return dtype.default()
+        if isinstance(dtype, Elementary):
+            t = dtype.iec
             if isinstance(d.init, ast.ArrayInit):
                 self.err(f"'{d.name}' ist kein Array", d.init)
                 return None
@@ -483,28 +561,33 @@ class PouCompiler:
             except (ValueError, TypeError, OverflowError):
                 self.err(f"Ungültiger Initialwert für '{d.name}'", d)
             return None
-        length = dims[1] - dims[0] + 1
+        # ARRAY
+        if d.init is None:
+            if d.constant:
+                self.err(f"Konstante '{d.name}' benötigt einen Wert", d)
+            return dtype.default()
+        if not isinstance(dtype.elem, Elementary):
+            self.err(f"Arrays von Strukturen erhalten ihre Startwerte aus der Typdeklaration", d.init)
+            return None
+        if not isinstance(d.init, ast.ArrayInit):
+            self.err(f"Initialwert für Array '{d.name}' muss eine Liste [ … ] sein", d.init)
+            return None
+        t = dtype.elem.iec
         values = []
-        if d.init is not None:
-            if not isinstance(d.init, ast.ArrayInit):
-                self.err(f"Initialwert für Array '{d.name}' muss eine Liste [ … ] sein", d.init)
-                return None
-            try:
-                for count, item in d.init.items:
-                    n = 1 if count is None else self.const_eval(count)
-                    values.extend([coerce(t, self.const_eval(item))] * n)
-            except STError as e:
-                self.unit.errors.append(e)
-                return None
-            except (ValueError, TypeError, OverflowError):
-                self.err(f"Ungültiger Initialwert für '{d.name}'", d)
-                return None
-            if len(values) > length:
-                self.err(f"{len(values)} Initialwerte für '{d.name}' mit {length} Elementen", d.init)
-                return None
-        elif d.constant:
-            self.err(f"Konstante '{d.name}' benötigt einen Wert", d)
-        return values + [t.default] * (length - len(values))
+        try:
+            for count, item in d.init.items:
+                n = 1 if count is None else self.const_eval(count)
+                values.extend([coerce(t, self.const_eval(item))] * n)
+        except STError as e:
+            self.unit.errors.append(e)
+            return None
+        except (ValueError, TypeError, OverflowError):
+            self.err(f"Ungültiger Initialwert für '{d.name}'", d)
+            return None
+        if len(values) > dtype.length:
+            self.err(f"{len(values)} Initialwerte für '{d.name}' mit {dtype.length} Elementen", d.init)
+            return None
+        return values + [t.default] * (dtype.length - len(values))
 
     def const_eval(self, node: ast.Node):
         """Evaluate an initial value; may reference previously declared constants."""
@@ -539,8 +622,8 @@ class PouCompiler:
                 else:
                     self.err(f"Unbekannte Variable '{node.name}'", node)
                 return lambda: 0
-            if var.is_array:
-                self.err(f"Array '{node.name}' braucht einen Index, z. B. {node.name}[0]", node)
+            if not var.is_elementary:
+                self.err(self._composite_message(node.name, var.dtype), node)
                 return lambda: 0
             if const and not var.constant:
                 self.err(f"Initialwert darf nur Konstanten verwenden, nicht '{node.name}'", node)
@@ -549,20 +632,14 @@ class PouCompiler:
                 value = var.value
                 return lambda: value
             return lambda: var.value
-        if isinstance(node, ast.Index):
-            return self.index_read(node, const)
-        if isinstance(node, ast.Member):
-            inst = self.fbs.get(node.obj.upper())
-            if inst is None:
-                self.err(f"Unbekannte Funktionsbaustein-Instanz '{node.obj}'", node)
+        if isinstance(node, ast.Path):
+            getter, dtype = self.path(node, const)
+            if getter is None:
                 return lambda: 0
-            block_cls = type(inst.block)
-            if node.member not in block_cls.OUTPUTS and node.member not in block_cls.INPUTS:
-                self.err(f"{getattr(block_cls, 'DISPLAY_NAME', inst.type_name)} hat keinen Parameter '{node.member}'", node)
+            if not is_elementary(dtype):
+                self.err(self._composite_message(self._path_text(node), dtype), node)
                 return lambda: 0
-            member = node.member
-            # Resolve the block at run time: a warm restart may swap it.
-            return lambda: inst.block.values[member]
+            return getter
         if isinstance(node, ast.Unary):
             operand = self.expr(node.operand, const)
             if node.op == "-":
@@ -575,32 +652,89 @@ class PouCompiler:
         self.err("Nicht unterstützter Ausdruck", node)  # pragma: no cover
         return lambda: 0
 
-    def array_var(self, name: str, node: ast.Node) -> Variable | None:
-        var = self.variables.get(name.upper())
-        if var is None:
-            self.err(f"Unbekannte Variable '{name}'", node)
-            return None
-        if not var.is_array:
-            self.err(f"'{name}' ist kein Array", node)
-            return None
-        return var
+    @staticmethod
+    def _composite_message(name: str, dtype: DataType) -> str:
+        if isinstance(dtype, ArrayType):
+            return f"Array '{name}' braucht einen Index, z. B. {name}[{dtype.low}]"
+        return f"Struktur '{name}' braucht ein Feld, z. B. {name}.{dtype.fields[0].name}"
 
-    def index_read(self, node: ast.Index, const: bool) -> Expr:
-        var = self.array_var(node.name, node)
-        index = self.expr(node.index, const)
+    @staticmethod
+    def _path_text(node: ast.Path) -> str:
+        out = node.base
+        for kind, arg, display in node.steps:
+            out += f".{display}" if kind == "field" else "[…]"
+        return out
+
+    def path(self, node: ast.Path, const: bool = False):
+        """Compile an access path. Returns (getter, data type) or (None, None) after an error.
+
+        The base is either a function block instance (one step: its input/output) or a
+        variable (fields and indices in any depth).
+        """
+        base_key = node.base.upper()
+        inst = self.fbs.get(base_key)
+        if inst is not None:
+            kind, member, display = node.steps[0]
+            cls = type(inst.block)
+            if kind != "field":
+                self.err(f"'{node.base}' ist ein Funktionsbaustein, kein Array", node)
+                return None, None
+            if len(node.steps) > 1:
+                self.err(f"Ausgänge von Funktionsbausteinen sind elementar ('{node.base}.{display}')", node)
+                return None, None
+            iec = cls.OUTPUTS.get(member) or cls.INPUTS.get(member)
+            if iec is None:
+                self.err(f"{getattr(cls, 'DISPLAY_NAME', inst.type_name)} hat keinen Parameter '{member}'", node)
+                return None, None
+            # Resolve the block at run time: a warm restart may swap it.
+            return (lambda: inst.block.values[member]), Elementary(iec)
+        var = self.variables.get(base_key)
         if var is None:
-            return lambda: 0
+            self.err(f"Unbekannte Variable '{node.base}'", node)
+            return None, None
         if const and not var.constant:
-            self.err(f"Initialwert darf nur Konstanten verwenden, nicht '{node.name}'", node)
-            return lambda: 0
+            self.err(f"Initialwert darf nur Konstanten verwenden, nicht '{node.base}'", node)
+            return None, None
+        steps, dtype, shown = [], var.dtype, node.base
+        for kind, arg, display in node.steps:
+            if kind == "field":
+                f = dtype.field(arg) if isinstance(dtype, StructType) else None
+                if f is None:
+                    what = f"'{shown}' ist keine Struktur" if not isinstance(dtype, StructType) \
+                        else f"{dtype.name} hat kein Feld '{display}'"
+                    self.err(what, node)
+                    return None, None
+                steps.append(("f", arg, None))
+                dtype, shown = f.dtype, f"{shown}.{f.name}"
+            else:
+                if not isinstance(dtype, ArrayType):
+                    self.err(f"'{shown}' ist kein Array", node)
+                    return None, None
+                steps.append(("i", self.expr(arg, const), (dtype, shown)))
+                dtype, shown = dtype.elem, f"{shown}[…]"
         line, col = node.line, node.col
 
-        def read():
-            try:
-                return var.value[var.element_index(int(index()))]
-            except IndexError as e:
-                raise PLCRuntimeError(str(e), line, col) from None
-        return read
+        def get_container(upto: int):
+            v = var.value
+            for kind, a, info in steps[:upto]:
+                if kind == "f":
+                    v = v[a]
+                else:
+                    arr, name = info
+                    try:
+                        v = v[arr.position(int(a()), name)]
+                    except IndexError as e:
+                        raise PLCRuntimeError(str(e), line, col) from None
+            return v
+
+        n = len(steps)
+
+        def getter():
+            return get_container(n)
+        getter.container = get_container  # used by assignments
+        getter.steps = steps
+        getter.var = var
+        return getter, dtype
 
     def binary(self, node: ast.Binary, const: bool) -> Expr:
         left = self.expr(node.left, const)
@@ -760,6 +894,7 @@ class PouCompiler:
         return run
 
     def target(self, name: ast.Name) -> Variable | None:
+        """Elementary variable that a statement writes (assignment, FOR, FB output)."""
         var = self.variables.get(name.name.upper())
         if var is None:
             if name.name.upper() in self.fbs:
@@ -784,44 +919,78 @@ class PouCompiler:
                 ) from None
         return assign
 
+    def _composite_source(self, node: ast.Node, dtype: DataType, target: str):
+        """Getter for the right-hand side of a whole-array/struct assignment, or None."""
+        if isinstance(node, ast.Name):
+            other = self.variables.get(node.name.upper())
+            if other is not None and same_layout(other.dtype, dtype):
+                return lambda: other.value
+        elif isinstance(node, ast.Path) and node.base.upper() not in self.fbs:
+            n_errors = len(self.unit.errors)
+            getter, src_dtype = self.path(node)
+            if getter is not None and same_layout(src_dtype, dtype):
+                return getter
+            del self.unit.errors[n_errors:]
+        kind = "Array" if isinstance(dtype, ArrayType) else "Struktur"
+        self.err(f"{kind} '{target}' kann nur ein gleichartiges {kind} ({dtype.label}) zugewiesen werden", node)
+        return None
+
     def assign_stmt(self, node: ast.Assign) -> Stmt:
-        if isinstance(node.target, ast.Index):
-            var = self.array_var(node.target.name, node.target)
-            if var is not None and var.constant:
+        line, col = node.line, node.col
+        if isinstance(node.target, ast.Path):
+            if node.target.base.upper() in self.fbs:
+                self.err("Ein- und Ausgänge von Funktionsbausteinen werden beim Aufruf versorgt, nicht zugewiesen",
+                         node.target)
+                return lambda: None
+            getter, dtype = self.path(node.target)
+            if getter is None:
+                self.expr(node.value)
+                return lambda: None
+            var = getter.var
+            if var.constant:
                 self.err(f"Konstante '{var.name}' kann nicht beschrieben werden", node.target)
-                var = None
-            index = self.expr(node.target.index)
-            value = self.expr(node.value)
-            if var is None:
                 return lambda: None
-            t, line, col = var.type, node.line, node.col
+            container, steps = getter.container, getter.steps
+            last_kind, last_arg, last_info = steps[-1]
+            n = len(steps)
+            if is_elementary(dtype):
+                value, t = self.expr(node.value), dtype.iec
+            else:
+                src = self._composite_source(node.value, dtype, self._path_text(node.target))
+                if src is None:
+                    return lambda: None
+                value, t = (lambda: dtype.copy(src())), None
 
-            def assign_element():
+            def assign_path():
                 v = value()
+                parent = container(n - 1)
+                if last_kind == "f":
+                    key = last_arg
+                else:
+                    arr, name = last_info
+                    try:
+                        key = arr.position(int(last_arg()), name)
+                    except IndexError as e:
+                        raise PLCRuntimeError(str(e), line, col) from None
                 try:
-                    i = var.element_index(int(index()))
-                    var.value[i] = coerce(t, v)
-                except IndexError as e:
-                    raise PLCRuntimeError(str(e), line, col) from None
+                    parent[key] = coerce(t, v) if t is not None else v
                 except (ValueError, TypeError, OverflowError):
-                    raise PLCRuntimeError(f"Wert {v!r} passt nicht in {t.name}-Element von '{var.name}'", line, col) from None
-            return assign_element
+                    raise PLCRuntimeError(f"Wert {v!r} passt nicht in {t.name}", line, col) from None
+            return assign_path
         var = self.target(node.target)
-        if var is not None and var.is_array:
-            # whole-array copy: a := b with identical shape
-            src = node.value
-            other = self.variables.get(src.name.upper()) if isinstance(src, ast.Name) else None
-            if other is None or not other.is_array or not other.same_shape(var):
-                self.err(f"Array '{var.name}' kann nur ein gleichartiges Array zugewiesen werden", node)
+        if var is not None and not var.is_elementary:
+            src = self._composite_source(node.value, var.dtype, var.name)
+            if src is None:
                 return lambda: None
+            dtype = var.dtype
 
-            def copy_array():
-                var.value = list(other.value)
-            return copy_array
+            def copy_whole():
+                var.value = dtype.copy(src())
+            return copy_whole
         value = self.expr(node.value)
         if var is None:
             return lambda: None
-        assign = self.assigner(var, node.line, node.col)
+        assign = self.assigner(var, line, col)
         return lambda: assign(value())
 
     def stmt(self, node: ast.Node) -> Stmt:
@@ -917,7 +1086,7 @@ class PouCompiler:
 
     def for_loop(self, node: ast.For) -> Stmt:
         var = self.target(node.var)
-        if var is not None and (var.type.kind != "int" or var.is_array):
+        if var is not None and (not var.is_elementary or var.type.kind != "int"):
             self.err(f"Laufvariable '{var.name}' muss ein Ganzzahltyp sein", node.var)
             var = None
         start = self.expr(node.start)
@@ -975,6 +1144,9 @@ class PouCompiler:
                 self.err(f"{display} hat keinen Ausgang '{pname}'", node)
                 continue
             var = self.target(target)
+            if var is not None and not var.is_elementary:
+                self.err(f"'{var.name}' ist kein elementarer Wert und kann keinen Ausgang aufnehmen", target)
+                var = None
             if var is not None:
                 outputs.append((pname, self.assigner(var, target.line, target.col)))
         ref, line, col = self.ref, node.line, node.col

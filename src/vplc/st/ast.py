@@ -44,10 +44,21 @@ class Binary(Node):
 
 @dataclass
 class Index(Node):
-    """Array element access: name[index]."""
+    """Array element access: name[index] (kept for compatibility; the parser emits Path)."""
 
     name: str
     index: Node
+
+
+@dataclass
+class Path(Node):
+    """Access path: base followed by fields and indices, e.g. Lager[i].Menge or Motor.Q.
+
+    steps: ("field", UPPER_NAME, declared_name) | ("index", expression, None)
+    """
+
+    base: str
+    steps: list[tuple[str, object, object]]
 
 
 @dataclass
@@ -67,7 +78,7 @@ class Call(Node):
 # ---------------------------------------------------------------- statements
 @dataclass
 class Assign(Node):
-    target: Name | Index
+    target: Name | Path
     value: Node
 
 
@@ -146,6 +157,14 @@ class VarDecl(Node):
 
 
 @dataclass
+class TypeDecl(Node):
+    """TYPE Name : STRUCT … END_STRUCT; END_TYPE"""
+
+    name: str
+    fields: list[VarDecl]
+
+
+@dataclass
 class FunctionBlockDecl(Node):
     name: str
     decls: list[VarDecl]
@@ -166,4 +185,5 @@ class Program(Node):
     decls: list[VarDecl]
     body: list[Node]
     function_blocks: list[FunctionBlockDecl] = field(default_factory=list)
+    types: list[TypeDecl] = field(default_factory=list)
     functions: list[FunctionDecl] = field(default_factory=list)

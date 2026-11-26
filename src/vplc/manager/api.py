@@ -10,6 +10,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
@@ -49,8 +50,8 @@ class SourceCheck(BaseModel):
     source: str = Field(max_length=1_000_000)
 
 
-Scalar = bool | int | float | str
-Value = Scalar | list[bool | int | float]  # lists for ARRAY variables
+# Scalars, lists (ARRAY) and objects (STRUCT); checked against the variable's type later
+Value = Any
 
 
 class VariableWrite(BaseModel):
@@ -62,7 +63,11 @@ class VariablesWrite(BaseModel):
 
 
 def _json_value(v):
-    """JSON cannot carry NaN/Infinity; send them as strings."""
+    """JSON cannot carry NaN/Infinity; send them as strings (also inside arrays and structs)."""
+    if isinstance(v, list):
+        return [_json_value(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _json_value(x) for k, x in v.items()}
     if isinstance(v, float) and not math.isfinite(v):
         return "NaN" if math.isnan(v) else ("Infinity" if v > 0 else "-Infinity")
     return v

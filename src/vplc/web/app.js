@@ -57,9 +57,16 @@ function fmtScalar(x) {
   return String(x);
 }
 
+function fmtAny(x) {
+  if (Array.isArray(x)) return "[" + x.map(fmtAny).join(", ") + "]";
+  if (x && typeof x === "object") return "{" + Object.entries(x).map(([k, y]) => `${k}: ${fmtAny(y)}`).join(", ") + "}";
+  if (typeof x === "string") return JSON.stringify(x);
+  return fmtScalar(x);
+}
+
 function fmtValue(v) {
   if (v.display) return v.display;
-  if (Array.isArray(v.value)) return "[" + v.value.map(fmtScalar).join(", ") + "]";
+  if (Array.isArray(v.value) || (v.value && typeof v.value === "object")) return fmtAny(v.value);
   if (typeof v.value === "boolean") return v.value ? "TRUE" : "FALSE";
   if (typeof v.value === "number" && !Number.isInteger(v.value)) return Number(v.value.toPrecision(7)).toString();
   return String(v.value);
@@ -244,16 +251,19 @@ function writeControl(v) {
   if (v.type === "BOOL") {
     return el("button", { class: "small", onclick: () => writeVar(v.name, !v.value) }, v.value ? "→ FALSE" : "→ TRUE");
   }
-  const input = el("input", { type: "text", placeholder: Array.isArray(v.value) ? "[1, 2, …]" : "Wert", "data-var": v.name,
+  const placeholder = Array.isArray(v.value) ? "[1, 2, …]" : v.value && typeof v.value === "object" ? '{"Feld": …}' : "Wert";
+  const input = el("input", { type: "text", placeholder, "data-var": v.name,
     onkeydown: (ev) => { if (ev.key === "Enter") submit(); } });
   const submit = () => {
     const raw = input.value.trim();
     if (!raw) return;
     let value;
-    if (raw.startsWith("[")) {
-      // whole array, e.g. [1, 2, 3]; TRUE/FALSE are accepted as in ST
+    if (raw.startsWith("[") || raw.startsWith("{")) {
+      // whole array [1, 2, 3] or (partial) struct {"Menge": 5}; TRUE/FALSE as in ST
       try { value = JSON.parse(raw.replace(/\bTRUE\b/gi, "true").replace(/\bFALSE\b/gi, "false")); }
-      catch (_) { toast("Liste nicht lesbar – Beispiel: [1, 2, 3]", true); return; }
+      catch (_) { toast('Nicht lesbar – Beispiele: [1, 2, 3] oder {"Menge": 5}', true); return; }
+    } else if (v.type.startsWith("STRING")) {
+      value = raw;  // text stays text, even if it looks like a number
     } else {
       const num = Number(raw.replace(",", "."));
       value = Number.isFinite(num) ? num : raw;

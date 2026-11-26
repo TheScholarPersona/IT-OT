@@ -13,9 +13,9 @@ Programmversionen und Audit-Log.
 | Bereich | Umfang in v0.1 |
 |---|---|
 | **Runtime** | Zyklische Bearbeitung (Eingänge lesen → Programm → Ausgänge schreiben), einstellbare Zykluszeit, Zykluszeitüberwachung, Betriebsarten RUN/STOP, Warm- und Kaltstart, Diagnosepuffer, Laufzeitfehler (z. B. Division durch 0) führen wie bei einer CPU in STOP |
-| **Sprache** | Structured Text: `PROGRAM`, eigene `FUNCTION_BLOCK`s und `FUNCTION`s, `VAR`/`VAR_INPUT`/`VAR_OUTPUT`/`VAR_TEMP`/`CONSTANT`, `ARRAY[lo..hi] OF …`, `IF`/`CASE`/`FOR`/`WHILE`/`REPEAT`/`EXIT`/`CONTINUE`/`RETURN`, alle Operatoren, Literale (`16#FF`, `T#1m30s`, `INT#5` …) |
-| **Datentypen** | BOOL, SINT, INT, DINT, LINT, USINT, UINT, UDINT, ULINT, BYTE, WORD, DWORD, LWORD, REAL (32 Bit), LREAL, TIME – Überlauf wie auf der SPS |
-| **Bibliothek** | TON, TOF, TP, R_TRIG, F_TRIG, CTU, CTD, CTUD, SR, RS; ABS, SQRT, LN, LOG, EXP, SIN…ATAN, MIN, MAX, LIMIT, SEL, MUX, SHL, SHR, TRUNC, alle `*_TO_*`-Konvertierungen |
+| **Sprache** | Structured Text: `PROGRAM`, eigene `FUNCTION_BLOCK`s und `FUNCTION`s, `VAR`/`VAR_INPUT`/`VAR_OUTPUT`/`VAR_TEMP`/`CONSTANT`, `ARRAY[lo..hi] OF …`, Strukturen (`TYPE … STRUCT`), `STRING[n]`, `IF`/`CASE`/`FOR`/`WHILE`/`REPEAT`/`EXIT`/`CONTINUE`/`RETURN`, alle Operatoren, Literale (`16#FF`, `T#1m30s`, `INT#5` …) |
+| **Datentypen** | BOOL, SINT, INT, DINT, LINT, USINT, UINT, UDINT, ULINT, BYTE, WORD, DWORD, LWORD, REAL (32 Bit), LREAL, TIME, STRING[n] – Überlauf wie auf der SPS; Arrays und Strukturen daraus, auch verschachtelt |
+| **Bibliothek** | TON, TOF, TP, R_TRIG, F_TRIG, CTU, CTD, CTUD, SR, RS; ABS, SQRT, LN, LOG, EXP, SIN…ATAN, MIN, MAX, LIMIT, SEL, MUX, SHL, SHR, TRUNC; LEN, CONCAT, LEFT, RIGHT, MID, FIND, INSERT, DELETE, REPLACE; alle `*_TO_*`-Konvertierungen |
 | **S7comm** | snap7-kompatibler Server je vPLC, Variablen als nicht optimierter DB (`DB1.DBX0.0`, `DB1.DBW2` …, Arrays wie im TIA Portal), Rack 0 / Slot 1 |
 | **OPC UA** | Server je vPLC, Knoten `ns=2;s=<Variable>` (Arrays als Array-Knoten) plus `_Status` (Mode, ScanCount, CycleTimeUs, Program) |
 | **Manager** | REST-API, Web-UI mit Editor und Fehleranzeige, Live-Variablen, Beobachten/Steuern, WebSocket-Stream für Variablenänderungen |
@@ -96,12 +96,12 @@ vplc check examples/ampel.st     # Syntax- und Semantikprüfung, z. B. für CI-P
 ## Entwicklung
 
 ```bash
-pytest                      # 71 Tests: Sprache, Arrays, eigene Bausteine, S7/OPC-UA-End-to-End, REST-API, Stream, CLI
+pytest                      # 81 Tests: Sprache, Arrays, Strukturen, Strings, eigene Bausteine, S7/OPC-UA-End-to-End, REST-API, Stream, CLI
 cd node-red && npm install && npm test    # 7 Tests: Node-RED-Nodes gegen echten Manager
 ```
 
 Was die vPLC nachweislich kann, zeigt der geprüfte [Feature-Katalog](docs/feature-katalog.md)
-(48 Features, jedes per bestandenem Test belegt) – als Ansicht in
+(50 Features, jedes per bestandenem Test belegt) – als Ansicht in
 [`docs/feature-katalog/index.html`](docs/feature-katalog/index.html).
 
 Aufbau und Designentscheidungen: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) ·

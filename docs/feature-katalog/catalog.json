@@ -1,21 +1,21 @@
 {
   "title": "IT-OT vPLC – Feature-Katalog",
-  "generated": "2026-11-26T13:45:54+00:00",
+  "generated": "2026-11-26T15:38:32+00:00",
   "reports": [
     "catalog-junit.xml",
     "nodered-junit.xml",
     "pytest-junit.xml"
   ],
   "stats": {
-    "features": 48,
-    "proven": 48,
+    "features": 50,
+    "proven": 50,
     "review": 5,
     "areas": 10,
     "areasDone": 10,
     "errors": 0,
     "warnings": 0,
-    "criteria": 130,
-    "evidence": 120,
+    "criteria": 140,
+    "evidence": 130,
     "components": 36
   },
   "areas": [
@@ -766,6 +766,7 @@
             "tests/test_stream_api.py:38",
             "tests/test_stream_api.py:55",
             "tests/test_stream_api.py:78",
+            "tests/test_structs_strings.py:245",
             "node-red/test/vplc_spec.js:65"
           ]
         },
@@ -2746,6 +2747,12 @@
           "kind": "effekt",
           "text": "Arrays sind ein Knoten mit Array-Wert; ein von außen geschriebenes Array wirkt auf das Programm.",
           "code": null
+        },
+        {
+          "id": "strukturen",
+          "kind": "effekt",
+          "text": "Strukturen sind Ordner mit Knoten je Feld (`Ziel.X`, `Faecher[1].Historie`); STRINGs sind String-Knoten; geschriebene Felder wirken auf das Programm.",
+          "code": null
         }
       ],
       "evidence": [
@@ -2764,6 +2771,14 @@
           "test": "test_arrays_over_opcua",
           "covers": [
             "arrays"
+          ]
+        },
+        {
+          "kind": "integration",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_structs_and_strings_over_opcua",
+          "covers": [
+            "strukturen"
           ]
         }
       ],
@@ -2800,6 +2815,21 @@
           ],
           "found": true,
           "line": 90,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_structs_and_strings_over_opcua",
+          "kind": "integration",
+          "covers": [
+            "strukturen"
+          ],
+          "found": true,
+          "line": 225,
           "has_assertion": true,
           "status_only": false,
           "related": true,
@@ -5145,7 +5175,8 @@
             "tests/test_api.py:47",
             "tests/test_arrays_protocols.py:111",
             "tests/test_operation_api.py:69",
-            "tests/test_stream_api.py:47"
+            "tests/test_stream_api.py:47",
+            "tests/test_structs_strings.py:252"
           ]
         }
       ],
@@ -5320,6 +5351,275 @@
       "findings": []
     },
     {
+      "id": "programmierung.strings",
+      "title": "Zeichenketten (STRING)",
+      "group": "programmierung.sprache",
+      "summary": "STRING und STRING[n] mit IEC-Escapes, Vergleichen, den Standard-Stringfunktionen und Umwandlungen in beide Richtungen.",
+      "description": "",
+      "usage": [
+        {
+          "channel": "entwicklung",
+          "text": "`Meldung : STRING[60] := 'Bereit';` – `CONCAT`, `LEN`, `LEFT`, `RIGHT`, `MID`, `FIND`, `INSERT`, `DELETE`, `REPLACE`, `INT_TO_STRING`, `STRING_TO_REAL` …"
+        }
+      ],
+      "rules": [
+        "Zu lange Texte werden auf die deklarierte Länge gekürzt (Standard 254 Zeichen, wie bei S7).",
+        "Positionen beginnen bei 1; die Reihenfolge der Parameter folgt IEC 61131-3 (z. B. `MID(IN, L, P)`).",
+        "Ungültige Positionen und nicht lesbare Zahlen sind Laufzeitfehler."
+      ],
+      "dependsOn": [],
+      "technical": {
+        "components": [
+          "src/vplc/types.py",
+          "src/vplc/st/lexer.py",
+          "src/vplc/st/stdlib.py"
+        ],
+        "endpoints": [],
+        "commands": [],
+        "nodes": [],
+        "uiRoutes": [],
+        "notes": []
+      },
+      "acceptance": [
+        {
+          "id": "funktionen",
+          "kind": "effekt",
+          "text": "Escapes, Kürzen auf STRING[8], LEN, FIND, LEFT, RIGHT, MID, INSERT, DELETE, REPLACE, CONCAT und Vergleiche liefern die erwarteten Werte.",
+          "code": null
+        },
+        {
+          "id": "umwandlung",
+          "kind": "effekt",
+          "text": "Zahlen und BOOL werden in Text umgewandelt und Text in Zahlen (auch mit Komma).",
+          "code": null
+        },
+        {
+          "id": "fehler",
+          "kind": "regel",
+          "text": "Position 0 bei MID, ein nicht lesbarer Zahltext, eine Länge über 254 und Text in doppelten Anführungszeichen werden gemeldet.",
+          "code": null
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "unit",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_strings_literals_escapes_length_and_functions",
+          "covers": [
+            "funktionen"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_string_conversions_both_ways",
+          "covers": [
+            "umwandlung"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_string_errors",
+          "covers": [
+            "fehler"
+          ]
+        }
+      ],
+      "comparisons": {
+        "themenliste": "vplc"
+      },
+      "area": "programmierung",
+      "inReview": false,
+      "status": "nachgewiesen",
+      "uncovered": [],
+      "evidenceResults": [
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_strings_literals_escapes_length_and_functions",
+          "kind": "unit",
+          "covers": [
+            "funktionen"
+          ],
+          "found": true,
+          "line": 27,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_string_conversions_both_ways",
+          "kind": "unit",
+          "covers": [
+            "umwandlung"
+          ],
+          "found": true,
+          "line": 55,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_string_errors",
+          "kind": "unit",
+          "covers": [
+            "fehler"
+          ],
+          "found": true,
+          "line": 65,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        }
+      ],
+      "endpointInfo": [],
+      "findings": []
+    },
+    {
+      "id": "programmierung.strukturen",
+      "title": "Strukturen (STRUCT / UDT)",
+      "group": "programmierung.sprache",
+      "summary": "Eigene Datentypen mit Feldern und Startwerten – verschachtelt, mit Array-Feldern und als Arrays von Strukturen.",
+      "description": "Strukturen werden in einem TYPE-Block im selben Quelltext deklariert. Zugriff über Pfade wie\n`Faecher[i].Ort.X`; ganze Strukturen lassen sich gleichartigen Strukturen zuweisen (Kopie).\nBeim Nachladen im RUN bleiben Werte erhalten, solange sich der Aufbau der Struktur nicht ändert.\n",
+      "usage": [
+        {
+          "channel": "entwicklung",
+          "text": "`TYPE Fach : STRUCT Menge : INT := 1; Ort : Position; END_STRUCT; END_TYPE` – Zugriff `Faecher[i].Menge`."
+        },
+        {
+          "channel": "api",
+          "text": "Werte als JSON-Objekt mit den deklarierten Feldnamen; Schreiben einzelner Felder (`Ziel.X`) oder teilweise (`{\"X\": 1}`)."
+        }
+      ],
+      "rules": [
+        "Startwerte kommen aus der Typdeklaration; Strukturen als Baustein-Ein-/Ausgang oder Rückgabewert sind noch nicht möglich.",
+        "Eine Struktur darf sich nicht selbst enthalten."
+      ],
+      "dependsOn": [],
+      "technical": {
+        "components": [
+          "src/vplc/datatypes.py",
+          "src/vplc/st/parser.py",
+          "src/vplc/st/compiler.py"
+        ],
+        "endpoints": [],
+        "commands": [],
+        "nodes": [],
+        "uiRoutes": [],
+        "notes": []
+      },
+      "acceptance": [
+        {
+          "id": "verschachtelt",
+          "kind": "effekt",
+          "text": "Feld-Startwerte, verschachtelte Strukturen, Array-Felder und Arrays von Strukturen lassen sich lesen und schreiben; Zuweisungen kopieren.",
+          "code": null
+        },
+        {
+          "id": "fehler",
+          "kind": "regel",
+          "text": "Selbstbezug, Struktur als Baustein-Eingang oder Rückgabewert, Initialwert an der Variable, unbekannte Felder, fehlendes Feld und ungleiche Strukturen werden gemeldet.",
+          "code": null
+        },
+        {
+          "id": "warmstart",
+          "kind": "effekt",
+          "text": "Beim Nachladen bleiben Strukturwerte erhalten; ändert sich der Aufbau, beginnt die Variable neu.",
+          "code": null
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "unit",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_structs_with_defaults_nesting_and_arrays_of_structs",
+          "covers": [
+            "verschachtelt"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_struct_errors",
+          "covers": [
+            "fehler"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_warm_restart_keeps_structs_with_unchanged_layout",
+          "covers": [
+            "warmstart"
+          ]
+        }
+      ],
+      "comparisons": {
+        "themenliste": "vplc"
+      },
+      "area": "programmierung",
+      "inReview": false,
+      "status": "nachgewiesen",
+      "uncovered": [],
+      "evidenceResults": [
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_structs_with_defaults_nesting_and_arrays_of_structs",
+          "kind": "unit",
+          "covers": [
+            "verschachtelt"
+          ],
+          "found": true,
+          "line": 108,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_struct_errors",
+          "kind": "unit",
+          "covers": [
+            "fehler"
+          ],
+          "found": true,
+          "line": 122,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_warm_restart_keeps_structs_with_unchanged_layout",
+          "kind": "unit",
+          "covers": [
+            "warmstart"
+          ],
+          "found": true,
+          "line": 145,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        }
+      ],
+      "endpointInfo": [],
+      "findings": []
+    },
+    {
       "id": "prozessdaten.variablen-lesen",
       "title": "Variablen lesen",
       "group": "prozessdaten.variablen",
@@ -5452,7 +5752,8 @@
             "tests/test_api.py:47",
             "tests/test_arrays_protocols.py:111",
             "tests/test_operation_api.py:69",
-            "tests/test_stream_api.py:47"
+            "tests/test_stream_api.py:47",
+            "tests/test_structs_strings.py:252"
           ]
         }
       ],
@@ -5523,6 +5824,12 @@
           "kind": "effekt",
           "text": "Ein Array-Element wird als `Name[i]` geschrieben, ein ganzes Array als Liste; falscher Index (`404`) oder falsche Länge (`400`) werden abgelehnt.",
           "code": null
+        },
+        {
+          "id": "strukturen",
+          "kind": "effekt",
+          "text": "Strukturen werden teilweise oder je Feldpfad geschrieben und mit deklarierten Feldnamen gelesen; zu lange Texte werden gekürzt, unbekannte Felder abgelehnt.",
+          "code": null
         }
       ],
       "evidence": [
@@ -5564,6 +5871,14 @@
           "test": "test_arrays_and_function_blocks_through_the_api",
           "covers": [
             "arrays"
+          ]
+        },
+        {
+          "kind": "integration",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_structs_and_strings_through_the_api",
+          "covers": [
+            "strukturen"
           ]
         }
       ],
@@ -5649,6 +5964,21 @@
           "related": true,
           "outcome": "bestanden",
           "message": ""
+        },
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_structs_and_strings_through_the_api",
+          "kind": "integration",
+          "covers": [
+            "strukturen"
+          ],
+          "found": true,
+          "line": 241,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
         }
       ],
       "endpointInfo": [
@@ -5662,7 +5992,12 @@
             "tests/test_arrays_protocols.py:108",
             "tests/test_arrays_protocols.py:109",
             "tests/test_arrays_protocols.py:106",
-            "tests/test_stream_api.py:64"
+            "tests/test_stream_api.py:64",
+            "tests/test_structs_strings.py:246",
+            "tests/test_structs_strings.py:248",
+            "tests/test_structs_strings.py:250",
+            "tests/test_structs_strings.py:251",
+            "tests/test_structs_strings.py:249"
           ]
         }
       ],
@@ -6082,6 +6417,12 @@
           "kind": "effekt",
           "text": "Array-Elemente sind einzeln lesbar und schreibbar; ein geschriebenes Element wirkt auf das Programm.",
           "code": null
+        },
+        {
+          "id": "struktur-string",
+          "kind": "effekt",
+          "text": "Strukturfelder und STRINGs (S7-Format mit Längenbytes) sind lesbar und schreibbar und wirken auf das Programm.",
+          "code": null
         }
       ],
       "evidence": [
@@ -6101,6 +6442,14 @@
           "test": "test_array_elements_over_s7",
           "covers": [
             "array-elemente"
+          ]
+        },
+        {
+          "kind": "integration",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_structs_and_strings_over_s7",
+          "covers": [
+            "struktur-string"
           ]
         }
       ],
@@ -6143,6 +6492,21 @@
           "related": true,
           "outcome": "bestanden",
           "message": ""
+        },
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_structs_and_strings_over_s7",
+          "kind": "integration",
+          "covers": [
+            "struktur-string"
+          ],
+          "found": true,
+          "line": 201,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
         }
       ],
       "endpointInfo": [],
@@ -6162,7 +6526,8 @@
       ],
       "rules": [
         "BOOL werden bitweise gepackt, Typen ab 2 Byte beginnen auf geraden Adressen; Big Endian.",
-        "Arrays beginnen und enden auf geraden Adressen; ARRAY OF BOOL wird bitweise gepackt."
+        "Arrays und Strukturen beginnen und enden auf geraden Adressen; ARRAY OF BOOL wird bitweise gepackt.",
+        "STRING[n] belegt n + 2 Byte (Maximal- und Ist-Länge) ab einer geraden Adresse."
       ],
       "dependsOn": [],
       "technical": {
@@ -6201,6 +6566,12 @@
           "id": "array-layout",
           "kind": "regel",
           "text": "Arrays liegen wie im TIA Portal – Start und Ende auf geraden Adressen, BOOL-Elemente bitweise gepackt.",
+          "code": null
+        },
+        {
+          "id": "struktur-layout",
+          "kind": "regel",
+          "text": "Verschachtelte Strukturen, Arrays von Strukturen und STRINGs liegen wie im TIA Portal.",
           "code": null
         },
         {
@@ -6249,6 +6620,14 @@
           "test": "test_s7_layout_of_arrays_like_tia_portal",
           "covers": [
             "array-layout"
+          ]
+        },
+        {
+          "kind": "unit",
+          "file": "tests/test_structs_strings.py",
+          "test": "test_s7_layout_of_structs_and_strings",
+          "covers": [
+            "struktur-layout"
           ]
         }
       ],
@@ -6329,6 +6708,21 @@
           ],
           "found": true,
           "line": 45,
+          "has_assertion": true,
+          "status_only": false,
+          "related": true,
+          "outcome": "bestanden",
+          "message": ""
+        },
+        {
+          "file": "tests/test_structs_strings.py",
+          "test": "test_s7_layout_of_structs_and_strings",
+          "kind": "unit",
+          "covers": [
+            "struktur-layout"
+          ],
+          "found": true,
+          "line": 169,
           "has_assertion": true,
           "status_only": false,
           "related": true,
@@ -6614,7 +7008,7 @@
           "status": "vorhanden",
           "summary": "Steuerungsprogramme laufen als Software und sind über S7 und OPC UA erreichbar.",
           "gaps": [
-            "Strukturen (STRUCT/UDT), STRING, mehrdimensionale Arrays, VAR_IN_OUT",
+            "Mehrdimensionale Arrays, VAR_IN_OUT, Aufzählungstypen, WSTRING; Strukturen und Arrays als Baustein-Ein-/Ausgang",
             "Siemens-SCL-Dialekt und Import aus TIA Portal",
             "Ein Container je vPLC"
           ],
@@ -6642,6 +7036,8 @@
             "programmierung.arrays",
             "programmierung.eigene-funktionsbausteine",
             "programmierung.eigene-funktionen",
+            "programmierung.strings",
+            "programmierung.strukturen",
             "prozessdaten.variablen-lesen",
             "prozessdaten.variable-schreiben",
             "prozessdaten.mehrere-schreiben",

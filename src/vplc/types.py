@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import re
 import struct
 from dataclasses import dataclass
+
+STRING_DEFAULT_LENGTH = 254
+STRING_MAX_LENGTH = 254  # S7: one byte each for maximum and actual length
 
 
 @dataclass(frozen=True)
 class IecType:
     name: str
-    kind: str  # "bool" | "int" | "real" | "time"
+    kind: str  # "bool" | "int" | "real" | "time" | "string"
     size: int  # bytes in an S7 (non-optimized) data block; BOOL = 0 (bit)
     signed: bool = True
     bits: int = 0
@@ -17,6 +21,8 @@ class IecType:
 
     @property
     def default(self):
+        if self.kind == "string":
+            return ""
         if self.kind == "bool":
             return False
         if self.kind == "real":
@@ -49,15 +55,39 @@ TYPES: dict[str, IecType] = {
 }
 
 
+def string_type(length: int = STRING_DEFAULT_LENGTH) -> IecType:
+    """STRING[length]: S7 layout = max length byte, actual length byte, characters."""
+    name = "STRING" if length == STRING_DEFAULT_LENGTH else f"STRING[{length}]"
+    return IecType(name, "string", length + 2, False, length, "String")
+
+
+TYPES["STRING"] = string_type()
+_STRING_RE = re.compile(r"^STRING\[(\d+)\]$")
+
+
 def get_type(name: str) -> IecType | None:
+    m = _STRING_RE.match(name.upper())
+    if m:
+        length = int(m.group(1))
+        return string_type(length) if 1 <= length <= STRING_MAX_LENGTH else None
     return TYPES.get(name.upper())
 
 
 def coerce(t: IecType, value):
     """Convert a Python value to the canonical representation of type *t*.
 
-    Integers wrap around like on a PLC, REAL is rounded to float32.
+    Integers wrap around like on a PLC, REAL is rounded to float32, STRING is
+    truncated to its maximum length (characters outside Latin-1 become '?').
     """
+    if t.kind == "string":
+        if isinstance(value, bool):
+            s = "TRUE" if value else "FALSE"
+        elif isinstance(value, float):
+            s = repr(value) if value != int(value) or abs(value) >= 1e16 else f"{value:.1f}"
+        else:
+            s = str(value)
+        s = s.encode("latin-1", "replace").decode("latin-1")
+        return s[: t.bits]
     if t.kind == "bool":
         if isinstance(value, str):
             return value.strip().upper() in ("TRUE", "1", "ON")
@@ -98,6 +128,12 @@ _STRUCT = {
 
 def encode(t: IecType, value, buf: bytearray, byte: int, bit: int = 0) -> None:
     """Write *value* into *buf* using S7 (big-endian) encoding."""
+    if t.kind == "string":
+        data = value.encode("latin-1", "replace")[: t.bits]
+        buf[byte] = t.bits
+        buf[byte + 1] = len(data)
+        buf[byte + 2: byte + 2 + t.bits] = data.ljust(t.bits, b"\0")
+        return
     if t.kind == "bool":
         if value:
             buf[byte] |= 1 << bit
@@ -108,6 +144,9 @@ def encode(t: IecType, value, buf: bytearray, byte: int, bit: int = 0) -> None:
 
 
 def decode(t: IecType, buf: bytes | bytearray, byte: int, bit: int = 0):
+    if t.kind == "string":
+        length = min(buf[byte + 1], t.bits)
+        return bytes(buf[byte + 2: byte + 2 + length]).decode("latin-1")
     if t.kind == "bool":
         return bool(buf[byte] >> bit & 1)
     return struct.unpack_from(_STRUCT[(t.kind, t.bits, t.signed)], buf, byte)[0]

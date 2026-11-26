@@ -7,9 +7,10 @@ the variables with absolute addresses (e.g. ``DB1.DBX0.0``, ``DB1.DBW2``).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..st.compiler import CompiledProgram, Variable
+from ..datatypes import ArrayType, Elementary, get_at
 from ..types import IecType, decode, encode
 
 log = logging.getLogger(__name__)
@@ -20,68 +21,83 @@ S7_CPU_STOP = 0x04
 
 @dataclass
 class S7Entry:
-    name: str  # "Soll" or "Werte[3]" for array elements
+    name: str  # display path: "Soll", "Werte[3]", "Lager[2].Menge"
     key: str  # upper-case variable name
     type: IecType
     byte: int
     bit: int
     writable: bool
-    index: int | None = None  # array element index (declared index, e.g. 1 for ARRAY[1..5])
+    steps: list = field(default_factory=list)  # path below the variable (datatypes.Step)
 
     @property
     def write_key(self) -> str:
-        return self.key if self.index is None else f"{self.key}[{self.index}]"
+        return self.name
 
     def address(self, db: int) -> str:
         t = self.type
         if t.kind == "bool":
             return f"DB{db}.DBX{self.byte}.{self.bit}"
+        if t.kind == "string":
+            return f"DB{db}.DBB{self.byte} (STRING, {t.size} Byte)"
         prefix = {1: "DBB", 2: "DBW", 4: "DBD"}.get(t.size)
         if prefix:
             return f"DB{db}.{prefix}{self.byte}"
         return f"DB{db}.DBB{self.byte} ({t.size} Byte)"
 
 
+class _Cursor:
+    def __init__(self):
+        self.byte = 0
+        self.bit = 0
+
+    def close_bits(self):
+        if self.bit:
+            self.byte, self.bit = self.byte + 1, 0
+
+    def align_even(self):
+        self.close_bits()
+        self.byte += self.byte % 2
+
+
+def _layout(dtype, name: str, key: str, steps: list, writable: bool, cur: _Cursor, out: list[S7Entry]):
+    if isinstance(dtype, Elementary):
+        t = dtype.iec
+        if t.kind == "bool":
+            if cur.bit == 8:
+                cur.byte, cur.bit = cur.byte + 1, 0
+            out.append(S7Entry(name, key, t, cur.byte, cur.bit, writable, steps))
+            cur.bit += 1
+            return
+        cur.close_bits()
+        if t.size > 1 and cur.byte % 2:
+            cur.byte += 1
+        out.append(S7Entry(name, key, t, cur.byte, 0, writable, steps))
+        cur.byte += t.size
+        return
+    # ARRAY and STRUCT start and end on an even address
+    cur.align_even()
+    if isinstance(dtype, ArrayType):
+        for i in range(dtype.low, dtype.high + 1):
+            _layout(dtype.elem, f"{name}[{i}]", key, steps + [("index", i)], writable, cur, out)
+    else:
+        for f in dtype.fields:
+            _layout(f.dtype, f"{name}.{f.name}", key, steps + [("field", f.key)], writable, cur, out)
+    cur.align_even()
+
+
 def build_layout(variables: list[Variable]) -> tuple[list[S7Entry], int]:
     """Assign S7 offsets like a non-optimized TIA Portal DB.
 
     BOOLs are packed bit by bit; every other type starts on a new byte and types
-    larger than one byte are aligned to an even address. Arrays start and end on an
-    even address; ARRAY OF BOOL is packed bit by bit inside.
+    larger than one byte (and STRINGs) start on an even address. Arrays and structs
+    start and end on an even address; inside, the same rules apply.
     """
     entries: list[S7Entry] = []
-    byte, bit = 0, 0
+    cur = _Cursor()
     for var in variables:
-        t = var.type
-        if getattr(var, "dims", None):
-            if bit:
-                byte, bit = byte + 1, 0
-            byte += byte % 2
-            low, high = var.dims
-            for n, index in enumerate(range(low, high + 1)):
-                name = f"{var.name}[{index}]"
-                if t.kind == "bool":
-                    entries.append(S7Entry(name, var.name.upper(), t, byte + n // 8, n % 8, var.writable, index))
-                else:
-                    entries.append(S7Entry(name, var.name.upper(), t, byte + n * t.size, 0, var.writable, index))
-            length = high - low + 1
-            byte += (length + 7) // 8 if t.kind == "bool" else length * t.size
-            byte += byte % 2
-            continue
-        if t.kind == "bool":
-            if bit == 8:
-                byte, bit = byte + 1, 0
-            entries.append(S7Entry(var.name, var.name.upper(), t, byte, bit, var.writable))
-            bit += 1
-            continue
-        if bit:
-            byte, bit = byte + 1, 0
-        if t.size > 1 and byte % 2:
-            byte += 1
-        entries.append(S7Entry(var.name, var.name.upper(), t, byte, 0, var.writable))
-        byte += t.size
-    size = byte + (1 if bit else 0)
-    size += size % 2
+        _layout(var.dtype, var.name, var.name.upper(), [], var.writable, cur, entries)
+    cur.close_bits()
+    size = cur.byte + cur.byte % 2
     return entries, max(size, 2)
 
 
@@ -205,8 +221,7 @@ class S7Endpoint:
                 var = variables.get(e.key)
                 if var is None:
                     continue
-                value = var.value if e.index is None else var.value[e.index - var.dims[0]]
-                encode(e.type, value, self.db, e.byte, e.bit)
+                encode(e.type, get_at(var.value, var.dtype, e.steps), self.db, e.byte, e.bit)
             self.shadow = bytes(self.db)
         finally:
             self._unlock(locked)

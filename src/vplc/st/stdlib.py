@@ -273,7 +273,73 @@ def _shr(x, n):
     return int(x) >> int(n)
 
 
+# ------------------------------------------------------------------ strings (IEC 61131-3, positions 1-based)
+def _str(x) -> str:
+    if not isinstance(x, str):
+        raise PLCRuntimeError("Zeichenkette erwartet")
+    return x
+
+
+def _count(n, what: str) -> int:
+    n = int(n)
+    if n < 0:
+        raise PLCRuntimeError(f"{what} darf nicht negativ sein")
+    return n
+
+
+def _left(s, n):
+    return _str(s)[: _count(n, "L")]
+
+
+def _right(s, n):
+    n = _count(n, "L")
+    return _str(s)[len(s) - n:] if n else ""
+
+
+def _mid(s, n, p):
+    s, n, p = _str(s), _count(n, "L"), int(p)
+    if p < 1:
+        raise PLCRuntimeError("Position P beginnt bei 1")
+    return s[p - 1: p - 1 + n]
+
+
+def _find(s1, s2):
+    return _str(s1).find(_str(s2)) + 1  # 0 = not found
+
+
+def _insert(s1, s2, p):
+    s1, s2, p = _str(s1), _str(s2), _count(p, "P")
+    return s1[:p] + s2 + s1[p:]
+
+
+def _delete(s, n, p):
+    s, n, p = _str(s), _count(n, "L"), int(p)
+    if p < 1:
+        raise PLCRuntimeError("Position P beginnt bei 1")
+    return s[: p - 1] + s[p - 1 + n:]
+
+
+def _replace(s1, s2, n, p):
+    s1, s2, n, p = _str(s1), _str(s2), _count(n, "L"), int(p)
+    if p < 1:
+        raise PLCRuntimeError("Position P beginnt bei 1")
+    return s1[: p - 1] + s2 + s1[p - 1 + n:]
+
+
+def _concat(*parts):
+    return "".join(_str(p) for p in parts)
+
+
 FUNCTIONS: dict[str, tuple[object, int, int | None]] = {
+    "LEN": (lambda s: len(_str(s)), 1, 1),
+    "CONCAT": (_concat, 2, None),
+    "LEFT": (_left, 2, 2),
+    "RIGHT": (_right, 2, 2),
+    "MID": (_mid, 3, 3),
+    "FIND": (_find, 2, 2),
+    "INSERT": (_insert, 3, 3),
+    "DELETE": (_delete, 3, 3),
+    "REPLACE": (_replace, 4, 4),
     # name: (callable, min args, max args or None for variadic)
     "ABS": (abs, 1, 1),
     "SQRT": (_real(math.sqrt), 1, 1),
@@ -299,6 +365,13 @@ FUNCTIONS: dict[str, tuple[object, int, int | None]] = {
 
 def _conversion(target: IecType):
     def convert(x):
+        if isinstance(x, str) and target.kind in ("int", "time", "real", "bool"):
+            text = x.strip().replace(",", ".") if target.kind != "bool" else x
+            try:
+                x = float(text) if target.kind != "bool" and not text.lstrip("+-").isdigit() else (
+                    int(text) if target.kind != "bool" else x)
+            except ValueError:
+                raise PLCRuntimeError(f"'{x}' ist keine Zahl für {target.name}") from None
         if target.kind in ("int", "time") and isinstance(x, float):
             if math.isnan(x) or math.isinf(x):
                 raise PLCRuntimeError(f"Ungültiger Wert bei Umwandlung nach {target.name}")

@@ -59,12 +59,16 @@ features:
       - id: arrays
         kind: effekt
         text: Ein Array-Element wird als `Name[i]` geschrieben, ein ganzes Array als Liste; falscher Index (`404`) oder falsche Länge (`400`) werden abgelehnt.
+      - id: strukturen
+        kind: effekt
+        text: Strukturen werden teilweise oder je Feldpfad geschrieben und mit deklarierten Feldnamen gelesen; zu lange Texte werden gekürzt, unbekannte Felder abgelehnt.
     evidence:
       - { kind: integration, file: tests/test_stream_api.py, test: test_stream_snapshot_changes_and_status, covers: [wirkt-im-zyklus] }
       - { kind: integration, file: tests/test_api.py, test: test_full_lifecycle, covers: [unbekannt] }
       - { kind: integration, file: tests/test_stream_api.py, test: test_name_lookup_and_bulk_write, covers: [konstante] }
       - { kind: integration, file: tests/test_runtime_protocols.py, test: test_write_variable_validation, covers: [typumwandlung] }
       - { kind: integration, file: tests/test_arrays_protocols.py, test: test_arrays_and_function_blocks_through_the_api, covers: [arrays] }
+      - { kind: integration, file: tests/test_structs_strings.py, test: test_structs_and_strings_through_the_api, covers: [strukturen] }
     comparisons: { themenliste: vplc }
 
   - id: prozessdaten.mehrere-schreiben

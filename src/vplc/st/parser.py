@@ -72,6 +72,7 @@ class Parser:
         program: ast.Program | None = None
         fbs: list[ast.FunctionBlockDecl] = []
         functions: list[ast.FunctionDecl] = []
+        types: list[ast.TypeDecl] = []
         while self.tok.kind != "EOF":
             if self.is_kw("PROGRAM"):
                 if program is not None:
@@ -81,13 +82,36 @@ class Parser:
                 fbs.append(self.parse_function_block())
             elif self.is_kw("FUNCTION"):
                 functions.append(self.parse_function())
+            elif self.is_kw("TYPE"):
+                types.extend(self.parse_type_block())
             else:
-                raise self.error(f"PROGRAM, FUNCTION_BLOCK oder FUNCTION erwartet, gefunden {self.describe(self.tok)}")
+                raise self.error(f"PROGRAM, FUNCTION_BLOCK, FUNCTION oder TYPE erwartet, gefunden {self.describe(self.tok)}")
         if program is None:
             raise self.error("PROGRAM erwartet – der Quelltext enthält kein Programm")
         program.function_blocks = fbs
         program.functions = functions
+        program.types = types
         return program
+
+    def parse_type_block(self) -> list[ast.TypeDecl]:
+        """TYPE Name : STRUCT <fields> END_STRUCT; [Name2 : STRUCT … END_STRUCT;] END_TYPE"""
+        self.expect_kw("TYPE")
+        decls: list[ast.TypeDecl] = []
+        while not self.is_kw("END_TYPE"):
+            name = self.expect_ident()
+            self.expect_op(":")
+            if not self.is_kw("STRUCT"):
+                raise self.error(f"STRUCT erwartet – andere Typdeklarationen (Aufzählungen, Alias) werden noch nicht unterstützt, gefunden {self.describe(self.tok)}")
+            self.advance()
+            fields = self.parse_var_lines("END_STRUCT", "STRUCT")
+            self.expect_kw("END_STRUCT")
+            self.optional_semicolon()
+            if not fields:
+                raise self.error(f"Struktur '{name.value}' hat keine Felder", name)
+            decls.append(ast.TypeDecl(name.value, fields, line=name.line, col=name.col))
+        self.expect_kw("END_TYPE")
+        self.optional_semicolon()
+        return decls
 
     def _decls(self) -> list[ast.VarDecl]:
         decls: list[ast.VarDecl] = []
@@ -117,9 +141,7 @@ class Parser:
         start = self.expect_kw("FUNCTION")
         name = self.expect_ident().value
         self.expect_op(":")
-        if self.tok.kind != "IDENT":
-            raise self.error(f"Rückgabetyp erwartet, gefunden {self.describe(self.tok)}")
-        return_type = self.advance().value.upper()
+        return_type = self.parse_type_name()
         self.optional_semicolon()
         decls = self._decls()
         body = self.parse_statements()
@@ -138,8 +160,18 @@ class Parser:
                 constant = True
             else:
                 retain = True
+        decls = self.parse_var_lines("END_VAR", section, constant, retain)
+        self.expect_kw("END_VAR")
+        self.optional_semicolon()
+        return decls
+
+    def parse_var_lines(self, end_kw: str, section: str, constant: bool = False,
+                        retain: bool = False) -> list[ast.VarDecl]:
+        """Declaration lines 'a, b : TYPE := init;' up to *end_kw* (not consumed)."""
         decls: list[ast.VarDecl] = []
-        while not self.is_kw("END_VAR"):
+        while not self.is_kw(end_kw):
+            if self.tok.kind == "EOF":
+                raise self.error(f"{end_kw} erwartet")
             names = [self.expect_ident()]
             while self.is_op(","):
                 self.advance()
@@ -148,9 +180,7 @@ class Parser:
             dims = None
             if self.is_kw("ARRAY"):
                 dims = self.parse_array_dims()
-            if self.tok.kind != "IDENT":
-                raise self.error(f"Datentyp erwartet, gefunden {self.describe(self.tok)}")
-            type_name = self.advance().value.upper()
+            type_name = self.parse_type_name()
             init = None
             if self.is_op(":="):
                 self.advance()
@@ -161,8 +191,6 @@ class Parser:
                     n.value, type_name, section, init, constant, retain, dims,
                     line=n.line, col=n.col,
                 ))
-        self.expect_kw("END_VAR")
-        self.optional_semicolon()
         return decls
 
     def parse_array_dims(self) -> tuple[ast.Node, ast.Node]:
@@ -196,6 +224,35 @@ class Parser:
                 self.expect_op(",")
         self.advance()
         return ast.ArrayInit(items, line=start.line, col=start.col)
+
+    def parse_path_steps(self, base) -> ast.Path:
+        """After the base identifier: any sequence of .field and [index]."""
+        steps: list[tuple[str, object, object]] = []
+        while self.is_op("[", "."):
+            if self.advance().value == ".":
+                f = self.expect_ident()
+                steps.append(("field", f.value.upper(), f.value))
+            else:
+                index = self.parse_expr()
+                if self.is_op(","):
+                    raise self.error("Mehrdimensionale Arrays werden noch nicht unterstützt")
+                self.expect_op("]")
+                steps.append(("index", index, None))
+        return ast.Path(base.value, steps, line=base.line, col=base.col)
+
+    def parse_type_name(self) -> str:
+        """IDENT or STRING[n]."""
+        if self.tok.kind != "IDENT":
+            raise self.error(f"Datentyp erwartet, gefunden {self.describe(self.tok)}")
+        name = self.advance().value.upper()
+        if name == "STRING" and self.is_op("["):
+            self.advance()
+            if self.tok.kind != "INT":
+                raise self.error("Länge der Zeichenkette als Ganzzahl erwartet, z. B. STRING[20]")
+            length = self.advance().value
+            self.expect_op("]")
+            name = f"STRING[{length}]"
+        return name
 
     # ------------------------------------------------------------ statements
     def parse_statements(self, case_body: bool = False) -> list[ast.Node]:
@@ -241,14 +298,13 @@ class Parser:
             raise self.error(f"Anweisung erwartet, gefunden {self.describe(t)}")
         if t.kind == "IDENT":
             ident = self.advance()
-            if self.is_op("["):
+            if self.is_op("[", "."):
+                target = self.parse_path_steps(ident)
+                if not self.is_op(":="):
+                    raise self.error(f"':=' erwartet, gefunden {self.describe(self.tok)}")
                 self.advance()
-                index = self.parse_expr()
-                self.expect_op("]")
-                self.expect_op(":=")
                 value = self.parse_expr()
                 self.expect_op(";")
-                target = ast.Index(ident.value, index, line=ident.line, col=ident.col)
                 return ast.Assign(target, value, line=ident.line, col=ident.col)
             if self.is_op(":="):
                 self.advance()
@@ -258,8 +314,6 @@ class Parser:
                 return ast.Assign(target, value, line=ident.line, col=ident.col)
             if self.is_op("("):
                 return self.parse_fb_call(ident)
-            if self.is_op("."):
-                raise self.error("Ausgänge von Funktionsbausteinen können nicht beschrieben werden")
             raise self.error(f"':=' oder '(' erwartet, gefunden {self.describe(self.tok)}")
         raise self.error(f"Anweisung erwartet, gefunden {self.describe(t)}")
 
@@ -486,16 +540,12 @@ class Parser:
                         self.expect_op(",")
                 self.advance()
                 return ast.Call(t.value.upper(), args, named, line=t.line, col=t.col)
-            if self.is_op("["):
-                self.advance()
-                index = self.parse_expr()
-                self.expect_op("]")
-                return ast.Index(t.value, index, line=t.line, col=t.col)
-            if self.is_op("."):
-                self.advance()
-                member = self.expect_ident()
-                return ast.Member(t.value, member.value.upper(), line=t.line, col=t.col)
+            if self.is_op("[", "."):
+                return self.parse_path_steps(t)
             return ast.Name(t.value, line=t.line, col=t.col)
+        if t.kind == "STRING":
+            self.advance()
+            return ast.Literal(t.value, "STRING", line=t.line, col=t.col)
         if self.is_op("("):
             self.advance()
             e = self.parse_expr()

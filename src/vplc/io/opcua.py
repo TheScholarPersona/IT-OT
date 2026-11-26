@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import math
 
+from ..datatypes import ArrayType, Elementary, get_at, is_leaf
 from ..st.compiler import CompiledProgram
 from .s7 import exposed_variables
 
@@ -28,7 +29,8 @@ class OpcUaEndpoint:
         self._ns = 2
         self._folder = None
         self._status = {}
-        self._nodes: dict[str, tuple[object, object]] = {}  # key -> (node, variant type)
+        self._nodes: dict[str, tuple] = {}  # PATH -> (node, variant type, var key, steps, dtype, path)
+        self._roots: list = []
         self._published: dict[str, object] = {}
         self.error: str | None = None
 
@@ -85,35 +87,55 @@ class OpcUaEndpoint:
         finally:
             self._server = None
             self._nodes.clear()
+            self._roots.clear()
 
     async def configure(self, program: CompiledProgram | None, program_label: str = "") -> None:
-        """Rebuild variable nodes after a program download."""
-        from asyncua import ua
+        """Rebuild variable nodes after a program download.
 
+        Elementary values and arrays of elementary values become variable nodes; structs and
+        arrays of structs become folders whose children are named by path (e.g. Lager[2].Menge).
+        """
         if self._server is None:
             return
-        for node, _ in self._nodes.values():
-            await self._server.delete_nodes([node])
+        if self._roots:
+            await self._server.delete_nodes(self._roots, recursive=True)
+        self._roots.clear()
         self._nodes.clear()
         self._published.clear()
         for var in exposed_variables(program):
-            vtype = getattr(ua.VariantType, var.type.opcua)
-            node = await self._folder.add_variable(
-                self._nid(var.name), var.name, ua.Variant(var.snapshot(), vtype)
-            )
+            node = await self._add(self._folder, var, var.dtype, var.name, var.name, [])
+            self._roots.append(node)
+        await self._status["Program"].write_value(program_label)
+
+    async def _add(self, parent, var, dtype, path: str, browse: str, steps: list):
+        from asyncua import ua
+
+        if is_leaf(dtype):
+            iec = dtype.iec if isinstance(dtype, Elementary) else dtype.elem.iec
+            vtype = getattr(ua.VariantType, iec.opcua)
+            value = dtype.copy(get_at(var.value, var.dtype, steps))
+            node = await parent.add_variable(self._nid(path), browse, ua.Variant(value, vtype))
             if var.writable:
                 await node.set_writable()
-            key = var.name.upper()
-            self._nodes[key] = (node, vtype)
-            self._published[key] = var.snapshot()
-        await self._status["Program"].write_value(program_label)
+            key = path.upper()
+            self._nodes[key] = (node, vtype, var.name.upper(), steps, dtype, path)
+            self._published[key] = value
+            return node
+        folder = await parent.add_folder(self._nid(path), browse)
+        if isinstance(dtype, ArrayType):
+            for i in range(dtype.low, dtype.high + 1):
+                await self._add(folder, var, dtype.elem, f"{path}[{i}]", f"{browse}[{i}]", steps + [("index", i)])
+        else:
+            for f in dtype.fields:
+                await self._add(folder, var, f.dtype, f"{path}.{f.name}", f.name, steps + [("field", f.key)])
+        return folder
 
     async def collect_writes(self) -> dict[str, object]:
         writes: dict[str, object] = {}
-        for key, (node, _) in self._nodes.items():
+        for key, (node, _, _, _, _, path) in self._nodes.items():
             value = await node.read_value()
             if not _equal(value, self._published.get(key)):
-                writes[key] = value
+                writes[path] = value
         return writes
 
     async def publish(self, program: CompiledProgram | None, status: dict) -> None:
@@ -122,13 +144,15 @@ class OpcUaEndpoint:
         if self._server is None:
             return
         if program is not None:
-            for key, (node, vtype) in self._nodes.items():
-                var = program.variables.get(key)
+            for key, (node, vtype, var_key, steps, dtype, _) in self._nodes.items():
+                var = program.variables.get(var_key)
                 if var is None:
                     continue
-                if not _equal(self._published.get(key), var.value):
-                    await node.write_value(ua.Variant(var.snapshot(), vtype))
-                    self._published[key] = var.snapshot()
+                current = get_at(var.value, var.dtype, steps)
+                if not _equal(self._published.get(key), current):
+                    value = dtype.copy(current)
+                    await node.write_value(ua.Variant(value, vtype))
+                    self._published[key] = value
         await self._status["Mode"].write_value(status["mode"])
         await self._status["ScanCount"].write_value(
             ua.Variant(status["scan_count"], ua.VariantType.UInt64))
