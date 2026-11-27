@@ -15,6 +15,7 @@ Alles Stack-Spezifische steht in **Profilen**:
 
 | Datei | Inhalt | Lesen, wenn … |
 |---|---|---|
+| [vorgehen/index.html](vorgehen/index.html) | **Einstiegstool im Browser:** Ablauf mit abhakbaren Gates, Agenten-Aufträgen, Steckbrief-/catalog.yaml-Generator, Reifegrad-Check | du das Vorgehen interaktiv durchgehen willst |
 | [vorgehen/README.md](vorgehen/README.md) | **Wiederverwendbarer Ablaufplan:** 7 Schritte mit Gate-Checks, Vorlagen, Agenten-Aufträgen; `vorgehen/scaffold.sh <projekt>` legt das Gerüst an | du in einem Projekt loslegst – **Einstieg** |
 | [references/vorgehensmodell.md](references/vorgehensmodell.md) | Phasen mit Eingaben, Tätigkeiten, Ergebnissen und Gates, Varianten, Rollen, Kennzahlen | du den Katalog einführst oder eine Phase abschließt |
 | [references/datenmodell.md](references/datenmodell.md) | YAML-Schema (`catalog.yaml`, Features, Prüfbestand, Vergleich), Schnittstellenarten | du YAML schreibst oder das Schema baust |

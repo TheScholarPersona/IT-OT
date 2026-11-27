@@ -1,0 +1,431 @@
+<title>Feature-Katalog Vorgehen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* VOICE work tool for engineering teams, startup product polish
+   IDEA a CI pipeline run: seven stages, gates turn green when their checks pass
+   PICTURE the pipeline itself, full width in a green field, live status per stage
+   COLOUR white ground, near-black ink, signal green field, amber for gates, red only for blocked
+   TYPE Geist 600/700 display + Geist text, Geist Mono for paths and prompts
+   LAYOUT laptop: nav, title left with stats right, pipeline across; phone: title, vertical pipeline, detail */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0b0c0e);--ink:light-dark(#0c0d0f,#ececef);--mute:light-dark(#5b5e66,#9b9ea6);--line:light-dark(#e5e6e9,#25272c);--panel:light-dark(#f5f6f7,#131418);--field:light-dark(#18c46f,#0f3b27);--fieldink:light-dark(#05170d,#e9fbf1);--card:light-dark(#ffffff,#0d1f16);--cardline:light-dark(#0a8a4c,#1e6b45);--ok:light-dark(#0a9a55,#36d98a);--gate:light-dark(#b86e00,#f4b545);--code:light-dark(#0f1012,#0f1012)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Geist,Inter,system-ui,sans-serif;overflow-x:clip}
+a{color:inherit}
+code,pre,.mono{font-family:"Geist Mono",ui-monospace,monospace}
+.wrap{max-width:1240px;margin:0 auto}
+.band{padding-block:clamp(28px,4vw,56px);padding-left:max(5vw,16px,env(safe-area-inset-left,0px));padding-right:max(5vw,16px,env(safe-area-inset-right,0px))}
+.hero{background:var(--field);color:var(--fieldink);margin-top:calc(-1*env(safe-area-inset-top,0px));padding-top:calc(env(safe-area-inset-top,0px) + 18px)}
+nav{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:clamp(28px,5vw,56px)}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;text-decoration:none}
+.logo svg{width:26px;height:26px}
+nav ul{display:flex;gap:4px;list-style:none;margin:0;padding:0;flex-wrap:wrap}
+nav ul a{display:block;padding:8px 12px;border-radius:8px;text-decoration:none;font-size:15px}
+nav ul a:hover{background:color-mix(in srgb,var(--fieldink) 10%,transparent)}
+.head{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:32px;align-items:end;margin-bottom:32px}
+h1{font-size:clamp(34px,4.6vw,52px);line-height:1.05;letter-spacing:-.025em;margin:0 0 14px;font-weight:700;max-width:14em}
+.lede{font-size:17px;margin:0;max-width:36em;opacity:.85}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:color-mix(in srgb,var(--fieldink) 18%,transparent);border-radius:12px;overflow:hidden}
+.stat{background:var(--field);padding:14px 16px}
+.stat b{display:block;font-size:30px;line-height:1.1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.stat span{font-size:13px;opacity:.8}
+.pipe{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:14px;list-style:none;margin:0;padding:0}
+.pipe li{position:relative}
+.pipe li:not(:last-child)::after{content:"";position:absolute;top:30px;right:-14px;width:14px;height:2px;background:var(--fieldink);opacity:.35}
+.node{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;width:100%;height:100%;padding:14px;border-radius:12px;background:var(--card);color:var(--ink);border:1px solid transparent;cursor:pointer;box-shadow:0 1px 0 rgba(0,0,0,.08)}
+.node:hover{border-color:var(--cardline)}
+.node:focus-visible{outline:3px solid var(--fieldink);outline-offset:2px}
+.node[aria-current=true]{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.nrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.st{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:none;border:2px solid var(--line)}
+.ok .st{background:var(--ok);border-color:var(--ok)}
+.ok .st::before{content:"";width:8px;height:4px;border:solid #fff;border-width:0 0 2px 2px;transform:translateY(-1px) rotate(-45deg)}
+.run .st{border-color:var(--gate);border-top-color:transparent;animation:spin 1.2s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.run .st{animation:none;border-top-color:var(--gate)}}
+.nnum{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+.nname{font-weight:600;font-size:16px;line-height:1.2}
+.bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}
+.run .bar i{background:var(--gate)}
+.nmeta{display:flex;justify-content:space-between;font-size:13px;color:var(--mute);white-space:nowrap}
+.gtag{color:var(--gate);font-weight:600}
+.pipefoot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px;font-size:14px;opacity:.85}
+.btn{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:9px;font-weight:500;font-size:15px;cursor:pointer;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.btn:hover{border-color:var(--mute)}
+.btn:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.ghost{background:transparent;color:inherit;border-color:color-mix(in srgb,currentColor 35%,transparent);min-height:34px;font-size:14px}
+h2{font-size:clamp(26px,3vw,34px);line-height:1.1;letter-spacing:-.02em;margin:0 0 8px}
+h3{font-size:17px;margin:0 0 10px}
+.sub{color:var(--mute);margin:0 0 28px;max-width:44em}
+.detail{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px}
+.ziel{font-size:20px;line-height:1.4;letter-spacing:-.01em;margin:0 0 20px;font-weight:500}
+ol.tasks{margin:0 0 24px;padding:0;list-style:none;counter-reset:t}
+ol.tasks li{counter-increment:t;display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+ol.tasks li::before{content:counter(t);font:500 13px "Geist Mono",monospace;color:var(--mute);padding-top:3px}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px;font-size:15px}
+.kv dt{color:var(--mute)}.kv dd{margin:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.panel+.panel{margin-top:16px}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-bottom:10px}
+.ph h3{margin:0}
+.chk{display:flex;gap:12px;align-items:flex-start;padding:9px 0;cursor:pointer;border-top:1px solid var(--line)}
+.chk:first-of-type{border-top:0}
+.chk input{width:20px;height:20px;margin:2px 0 0;accent-color:var(--ok);flex:none}
+.chk input:checked+span{color:var(--mute);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--mute) 60%,transparent)}
+.prompt{margin:0;background:var(--code);color:#e8e9ec;border-radius:10px;padding:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--gate) 16%,transparent);color:var(--gate);font-weight:600;white-space:nowrap}
+.alt{background:var(--panel);border-block:1px solid var(--line)}
+.gen{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:28px;align-items:start}
+.field{margin-bottom:18px}
+.field>label,.field>.lbl{display:block;font-weight:600;font-size:15px;margin-bottom:8px}
+input[type=text],select{font:16px Geist,system-ui,sans-serif;width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+input[type=text]:focus,select:focus{outline:2px solid var(--ok);outline-offset:0;border-color:transparent}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips label{cursor:pointer}
+.chips input{position:absolute;opacity:0;pointer-events:none}
+.chips span{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);font-size:14px}
+.chips input:checked+span{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chips input:focus-visible+span{outline:2px solid var(--ok);outline-offset:2px}
+.out{position:sticky;top:16px}
+.tabs{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap}
+.tabs button{all:unset;cursor:pointer;padding:7px 12px;border-radius:8px;font:500 14px "Geist Mono",monospace;color:var(--mute)}
+.tabs button[aria-selected=true]{background:var(--bg);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.out pre{margin:0;max-height:560px;overflow:auto;background:var(--code);color:#e8e9ec;border-radius:12px;padding:16px;font-size:13px;line-height:1.6}
+.rg{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:28px;align-items:start}
+.level{font-size:clamp(64px,9vw,104px);font-weight:700;line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;align-items:end;height:120px;margin:18px 0 10px}
+.steps i{display:block;border-radius:6px 6px 2px 2px;background:var(--line)}
+.steps i.on{background:var(--ok)}
+.rgl{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;font-size:13px;color:var(--mute);text-align:center}
+.rgl em{font-style:normal}
+.rgrow{border-top:1px solid var(--line);padding:14px 0}
+.rgrow h3{display:flex;gap:10px;align-items:baseline}
+.rgrow h3 small{color:var(--mute);font-weight:500;font:500 13px "Geist Mono",monospace}
+.kit{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:14px;margin-top:8px}
+.kit div{border:1px solid var(--line);border-radius:12px;padding:16px}
+.kit code{font-size:13px;overflow-wrap:anywhere;color:var(--ok);font-weight:500}
+.kit p{margin:6px 0 0;font-size:15px;color:var(--mute)}
+.cmd{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--code);color:#e8e9ec;border-radius:12px;padding:12px 12px 12px 16px;margin:24px 0 0}
+.cmd code{font-size:14px;overflow-wrap:anywhere}
+.cmd .btn{background:#24262b;color:#fff;border-color:#34363c}
+footer{color:var(--mute);font-size:14px}
+@media(max-width:1060px){.pipe{grid-template-columns:repeat(4,minmax(0,1fr))}.pipe li:nth-child(4)::after{display:none}}
+@media(max-width:900px){.head,.detail,.gen,.rg{grid-template-columns:minmax(0,1fr)}.out{position:static}}
+@media(max-width:600px){.pipe{grid-template-columns:minmax(0,1fr);gap:8px}.pipe li::after{display:none}.node{flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px}.node .nrow{order:0;flex:none}.node .nname{flex:1}.node .bar{flex-basis:100%;order:3}.node .nmeta{gap:10px}.stats b{font-size:24px}.rgl em{display:none}nav ul{display:none}}
+</style>
+
+<header class="hero band">
+ <div class="wrap">
+  <nav>
+   <a class="logo" href="#ablauf"><svg viewBox="0 0 26 26" aria-hidden="true"><rect width="26" height="26" rx="7" fill="currentColor"/><path d="M7 13.5l4 4 8-9" fill="none" stroke="var(--field)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Feature-Katalog</a>
+   <ul><li><a href="#ablauf">Ablauf</a></li><li><a href="#steckbrief">Steckbrief</a></li><li><a href="#reifegrad">Reifegrad</a></li><li><a href="#kit">Starter-Kit</a></li></ul>
+  </nav>
+  <div class="head">
+   <div>
+    <h1>Vom Code zum geprüften Feature-Katalog in sieben Schritten.</h1>
+    <p class="lede">Jede Fähigkeit eures Systems fachlich beschrieben und durch einen bestandenen Test belegt. Für jeden Stack, geprüft in jedem CI-Lauf.</p>
+   </div>
+   <div class="stats" aria-live="polite">
+    <div class="stat"><b id="sDone">0/7</b><span>Schritte fertig</span></div>
+    <div class="stat"><b id="sGates">0</b><span>Gate-Checks erfüllt</span></div>
+    <div class="stat"><b id="sNext">1</b><span>Nächster Schritt</span></div>
+   </div>
+  </div>
+  <ol class="pipe" id="pipe" aria-label="Ablauf"></ol>
+  <div class="pipefoot"><span id="sample">Beispielstand: Schritte 1 und 2 abgeschlossen. Euer Fortschritt bleibt in diesem Browser gespeichert.</span><button class="btn ghost" id="reset" type="button">Zurücksetzen</button></div>
+ </div>
+</header>
+
+<main>
+ <section class="band" id="ablauf">
+  <div class="wrap">
+   <div class="ph" style="align-items:flex-start;margin-bottom:6px">
+    <h2 id="dTitle">Schritt</h2><span class="pill" id="dGate" hidden>★ Gate mit Produktverantwortung</span>
+   </div>
+   <p class="sub" id="dMeta"></p>
+   <div class="detail">
+    <div>
+     <p class="ziel" id="dZiel"></p>
+     <h3>Tätigkeiten</h3>
+     <ol class="tasks" id="dTasks"></ol>
+     <dl class="kv" id="dKv"></dl>
+    </div>
+    <div>
+     <div class="panel">
+      <div class="ph"><h3>Gate-Check</h3><span class="nnum" id="dCount"></span></div>
+      <div id="dChecks"></div>
+     </div>
+     <div class="panel">
+      <div class="ph"><h3>Auftrag für den Agenten</h3><button class="btn" type="button" id="copyPrompt">Kopieren</button></div>
+      <pre class="prompt" id="dPrompt"></pre>
+     </div>
+     <div class="ph" style="margin-top:16px"><button class="btn" type="button" id="prev">← Zurück</button><button class="btn primary" type="button" id="next">Nächster Schritt →</button></div>
+    </div>
+   </div>
+  </div>
+ </section>
+
+ <section class="band alt" id="steckbrief">
+  <div class="wrap">
+   <h2>Steckbrief und Gerüst erzeugen</h2>
+   <p class="sub">Schritt 1 in fünf Minuten: Auswahl treffen, Ergebnis kopieren und in <code>docs/feature-katalog-steckbrief.md</code> bzw. <code>catalog/catalog.yaml</code> einfügen.</p>
+   <div class="gen">
+    <form id="sb" autocomplete="off">
+     <div class="field"><label for="sbName">System</label><input type="text" id="sbName" value="vPLC-Manager"></div>
+     <div class="field"><span class="lbl">Profile</span><div class="chips" id="sbProf"></div></div>
+     <div class="field"><span class="lbl">Bedienwege</span><div class="chips" id="sbCh"></div></div>
+     <div class="field"><span class="lbl">Schnittstellenarten</span><div class="chips" id="sbKinds"></div></div>
+     <div class="field"><span class="lbl">Testarten als Nachweis</span><div class="chips" id="sbTests"></div></div>
+     <div class="field"><label for="sbPilot">Pilotbereich</label><input type="text" id="sbPilot" value="Programme und Versionen"></div>
+     <div class="field"><label for="sbLevel">Zielreifegrad</label><select id="sbLevel"><option value="2">2 – Beschrieben</option><option value="3" selected>3 – Nachgewiesen</option><option value="4">4 – Belastbar</option><option value="5">5 – Steuernd</option></select></div>
+    </form>
+    <div class="out">
+     <div class="ph"><div class="tabs" role="tablist" id="tabs"><button role="tab" aria-selected="true" data-t="yaml" type="button">catalog.yaml</button><button role="tab" aria-selected="false" data-t="md" type="button">steckbrief.md</button></div><button class="btn" type="button" id="copyOut">Kopieren</button></div>
+     <pre id="outPre" tabindex="0"></pre>
+    </div>
+   </div>
+  </div>
+ </section>
+
+ <section class="band" id="reifegrad">
+  <div class="wrap rg">
+   <div>
+    <h2>Reifegrad-Selbstcheck</h2>
+    <p class="sub" style="margin-bottom:8px">Eine Stufe gilt erst, wenn sie und alle darunter vollständig erfüllt sind.</p>
+    <div class="level" id="lvl">0</div>
+    <div id="lvlName" style="font-weight:600;font-size:18px"></div>
+    <div class="steps" id="lvlSteps" aria-hidden="true"></div>
+    <div class="rgl"><span>1<em> Inventar</em></span><span>2<em> Beschrieben</em></span><span>3<em> Nachgewiesen</em></span><span>4<em> Belastbar</em></span><span>5<em> Steuernd</em></span></div>
+   </div>
+   <div id="rgList"></div>
+  </div>
+ </section>
+
+ <section class="band alt" id="kit">
+  <div class="wrap">
+   <h2>Starter-Kit</h2>
+   <p class="sub">Alles liegt unter <code>skills/feature-katalog/</code>. Das Skript legt das Gerüst in jedem Projekt an und überschreibt nichts.</p>
+   <div class="kit" id="kitList"></div>
+   <div class="cmd"><code id="cmdTxt">skills/feature-katalog/vorgehen/scaffold.sh /pfad/zum/projekt</code><button class="btn" type="button" id="copyCmd">Kopieren</button></div>
+  </div>
+ </section>
+</main>
+<footer class="band"><div class="wrap">Methode: <code>skills/feature-katalog/SKILL.md</code> · Ablauf: <code>vorgehen/README.md</code> · Aufwände sind Richtwerte für 50–150 Features und werden nach dem Pilot neu geschätzt.</div></footer>
+
+<script>
+{
+const STEPS=[
+ {n:"Klären",star:1,aufwand:"0,5 Tag",vorlage:"vorlagen/steckbrief.md",ergebnis:"bestätigter Steckbrief",
+  ziel:"Alle haben dasselbe Bild davon, für wen der Katalog ist und was als Nachweis zählt.",
+  t:["README, Doku, Build-Dateien und Tests sichten, Stack bestimmen und Profil wählen.","Steckbrief mit Vorschlägen ausfüllen; nur echte Lücken bleiben offene Fragen.","Steckbrief mit der Produktverantwortung durchgehen."],
+  g:["Zielgruppe, Rollen und Bedienwege festgelegt","Schnittstellenarten mit vermuteter Erkennung festgelegt","Testarten als Nachweis festgelegt (manual ja/nein)","Zielreifegrad festgelegt","Steckbrief von der Produktverantwortung bestätigt"],
+  p:"Führe Schritt 1 des Feature-Katalog-Vorgehens aus: Bestimme den Stack, wähle das Profil und fülle docs/feature-katalog-steckbrief.md mit Vorschlägen. Leg mir den Steckbrief zur Bestätigung vor."},
+ {n:"Inventar",aufwand:"0,5–2 Tage",vorlage:"catalog/discovered/<kind>.json",ergebnis:"Exportdateien und Liste aller Bestandteile",
+  ziel:"Jeder technisch erreichbare Bestandteil wird automatisch erkannt.",
+  t:["Je Schnittstellenart einen Export-Test schreiben, der bei veralteter Datei fehlschlägt (UPDATE_SNAPSHOTS=1 schreibt neu).","Testberichte je Testart als JUnit-XML erzeugen.","Erkennungslücken im Steckbrief festhalten."],
+  g:["Jede Schnittstellenart hat Exportdatei oder begründete Lücke","Export-Tests sind grün und schlagen bei veralteter Datei fehl","Je Testart ein JUnit-Bericht mit sprechenden Testnamen"],
+  p:"Führe Schritt 2 aus: Schreibe je Schnittstellenart aus dem Steckbrief einen Export-Test nach catalog/discovered/ und melde Erkennungslücken. Ändere keinen Produktivcode."},
+ {n:"Gliedern",star:1,aufwand:"0,5–1 Tag",vorlage:"vorlagen/catalog/catalog.yaml",ergebnis:"catalog.yaml mit Bereichen und owns",
+  ziel:"Eine fachliche Gliederung, in der jeder Bestandteil genau einem Bereich gehört.",
+  t:["Bereiche nach Aufgabenfeldern der Rollen schneiden, nicht nach Paketen; 5–20 Bereiche.","owns-Präfixe je Schnittstellenart vergeben.","Betriebsbestandteile mit Grund unter exclusions eintragen.","Gruppen als Leseführung und den Bereich katalog anlegen."],
+  g:["UNOWNED = 0 und OWNED_TWICE = 0","Jede Ausnahme hat einen Grund","Produktverantwortung erkennt sich in den Bereichen wieder"],
+  p:"Führe Schritt 3 aus: Schlage eine fachliche Gliederung in catalog/catalog.yaml vor, sodass UNOWNED und OWNED_TWICE 0 sind. Leg sie mir als Tabelle Bereich → owns zur Bestätigung vor."},
+ {n:"Werkzeug",aufwand:"1–3 Tage",vorlage:"vorlagen/ci-feature-katalog.yml",ergebnis:"check und build lokal und in der CI",
+  ziel:"Die Prüfung läuft automatisch in jedem CI-Lauf.",
+  t:["Vorhandenes Werkzeug einbinden oder nach references/werkzeug.md bauen (Kern + Profil).","CI-Entwurf an die Testjobs anpassen.","Tests des Werkzeugs als Nachweise des Bereichs katalog eintragen."],
+  g:["check läuft lokal und in der CI","Nur UNASSIGNED-Hinweise für offene Bereiche","build erzeugt index.html als CI-Artefakt"],
+  p:"Führe Schritt 4 aus: Binde das Werkzeug ein bzw. baue es nach references/werkzeug.md und passe den CI-Entwurf an."},
+ {n:"Pilot",star:1,aufwand:"1–2 Tage",vorlage:"vorlagen/catalog/features/_beispiel.yaml",ergebnis:"ein Bereich auf Reifegrad 3",
+  ziel:"Zuschnitt und Strenge an einem echten Bereich kalibrieren, bevor alles katalogisiert wird.",
+  t:["Pilotbereich wählen: mittelgroß, zwei Bedienwege, eine Regel mit Fehlercode.","Je Feature: Satz »Rolle kann Fähigkeit, damit Nutzen«, dann fachlich, technisch, Kriterien.","Tests sichten: passt → Nachweis mit covers, fehlt → Test schreiben oder Prüfbestand.","Ansicht vorführen, Konventionen in docs/feature-katalog.md festhalten."],
+  g:["Pilotbereich auf Reifegrad 3, check ohne Fehler","Jeder Nachweis im PR mit Kriterium → Aktion → Zusicherung belegt","Produktverantwortung hat den Zuschnitt bestätigt","Entwicklung hat die Strenge bestätigt","Aufwand für Schritt 6 neu geschätzt"],
+  p:"Führe Schritt 5 für den Bereich <id> aus. Lies jeden Testkörper, bevor du ihn als Nachweis einträgst, und belege jeden Nachweis mit Kriterium → Aktion → Zusicherung (Datei:Zeile)."},
+ {n:"Ausrollen",star:1,aufwand:"≈ 0,5 Tag je 10 Features",vorlage:"vorlagen/pr-nachweis.md",ergebnis:"alle Bereiche katalogisiert",
+  ziel:"Alle Bereiche sind katalogisiert, und was fehlt, steht ehrlich im Prüfbestand.",
+  t:["Bereiche nach Priorität abarbeiten, ein Bereich pro PR.","Je Bereich wie im Pilot vorgehen.","Fehlende Tests priorisieren: Kern schreiben, Rest in den Prüfbestand mit Grund und owner.","Reviewer ist nie, wer den Nachweis eingetragen hat."],
+  g:["Abnahme-Checkliste aus SKILL.md erfüllt","Reifegradbewertung durchgeführt","Prüfbestand mit Priorität und Verantwortlichen"],
+  p:"Führe Schritt 6 für den Bereich <id> aus wie im Pilot, in einem PR mit der Vorlage pr-nachweis.md."},
+ {n:"Betreiben",aufwand:"laufend",vorlage:"vorlagen/definition-of-done.md",ergebnis:"Katalog veraltet nie",
+  ziel:"Der Katalog lebt mit dem System: jeder PR hält ihn aktuell, jeder Lauf prüft ihn.",
+  t:["check als Pflicht-Check für den Hauptzweig einrichten.","Pflegeregeln in die Definition of Done übernehmen.","CODEOWNERS für catalog/ und PR-Vorlage aktivieren.","Takt: Prüfbestand je Sprint, Reifegrad je Quartal."],
+  g:["check ist Pflicht-Check","DoD enthält die Pflegeregeln","CODEOWNERS und PR-Vorlage aktiv","Termin für das erste Prüfbestand-Review steht"],
+  p:"Führe die Reifegradbewertung durch und aktualisiere den Stand in docs/feature-katalog.md."}
+];
+const RG=[
+ ["Inventarisiert",["Jede Schnittstellenart hat Erkennung oder begründete Lücke","UNOWNED = 0 und OWNED_TWICE = 0"]],
+ ["Beschrieben",["UNASSIGNED = 0","Jedes Feature hat fachliche und technische Ebene","Ausnahmen sind begründet"]],
+ ["Nachgewiesen",["check --reports ohne Fehler","Jedes Kriterium hat einen im letzten Lauf bestandenen Nachweis"]],
+ ["Belastbar",["Warnungen per Review geklärt","Mutationstests auf Kernkomponenten","Prüfbestand mit owner und sinkend"]],
+ ["Steuernd",["Neue Features entstehen Katalog-first","Release Notes und Planung aus dem Katalog","Vergleich wird gepflegt"]]
+];
+const PROF=[["python","Python"],["java-spring","Java/Spring"],["javascript-typescript","JS/TS"],["ot-industrie","OT/Industrie"]];
+const CH=["web","api","messaging","batch","cli","feldbus","integration","entwicklung"];
+const KINDS=[["endpoint","HTTP-Endpunkt","path"],["stream","WebSocket-Strom","path"],["event","Ereignis / Routing-Key","dot"],["job","Job","exact"],["command","CLI-Befehl","exact"],["uiRoute","Seite / Ansicht","path"],["opcuaNode","OPC-UA-Knoten","glob"],["s7Area","S7-Bereich","exact"],["mqttTopic","MQTT-Topic","glob"],["node","Node-RED-Node","exact"],["export","Bibliotheks-Export","exact"]];
+const TESTS=["unit","integration","e2e","scenario","hil","manual"];
+const KIT=[["vorgehen/README.md","Ablaufplan mit Gate-Checks und Agenten-Aufträgen"],["vorlagen/steckbrief.md","Steckbrief für Schritt 1"],["vorlagen/catalog/","catalog.yaml, Feature-Vorlage, Prüfbestand"],["vorlagen/pr-nachweis.md","PR-Vorlage: Kriterium → Aktion → Zusicherung"],["vorlagen/definition-of-done.md","Pflegeregeln für die DoD"],["vorlagen/reifegrad-bewertung.md","Bewertung und Kennzahlen je Bereich"],["vorlagen/ci-feature-katalog.yml","CI-Entwurf mit Katalog-Job"],["references/profile/","Stack-Profile und Vorlage für neue"]];
+
+const KEY="fk-vorgehen-v1";
+const example=()=>({checks:STEPS.map((s,i)=>s.g.map(()=>i<2)),active:2,
+ sb:{name:"vPLC-Manager",pilot:"Programme und Versionen",level:"3",prof:["python","ot-industrie","javascript-typescript"],ch:["web","api","cli","feldbus","integration","entwicklung"],kinds:["endpoint","stream","command","opcuaNode","s7Area","node"],tests:["unit","integration","e2e"]},
+ rg:RG.map((r,i)=>r[1].map(()=>i<1)),tab:"yaml",touched:false});
+let S=example();
+try{const raw=localStorage.getItem(KEY);if(raw){const v=JSON.parse(raw);if(v&&v.checks&&v.checks.length===STEPS.length)S=Object.assign(example(),v)}}catch(e){}
+const H=window.claude&&window.claude.hot;
+if(H&&H.data&&H.data.checks)S=Object.assign(example(),H.data);
+if(H&&H.snapshot)H.snapshot(()=>S);
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const stepDone=i=>S.checks[i].every(Boolean);
+const firstOpen=()=>{const i=STEPS.findIndex((s,k)=>!stepDone(k));return i<0?STEPS.length:i};
+
+function renderPipe(){
+ const fo=firstOpen();
+ $("pipe").innerHTML=STEPS.map((s,i)=>{
+  const c=S.checks[i],n=c.filter(Boolean).length,st=stepDone(i)?"ok":i===fo?"run":"";
+  return `<li><button type="button" class="node ${st}" data-i="${i}" aria-current="${i===S.active}"><div class="nrow"><span class="st" aria-hidden="true"></span><span class="nnum">Schritt ${i+1}</span></div><span class="nname">${esc(s.n)}</span><span class="bar"><i style="width:${Math.round(n/c.length*100)}%"></i></span><span class="nmeta"><span>${n}/${c.length} Checks</span>${s.star?'<span class="gtag">★ Gate</span>':""}</span></button></li>`}).join("");
+ const all=S.checks.flat();
+ $("sDone").textContent=STEPS.filter((s,i)=>stepDone(i)).length+"/7";
+ $("sGates").textContent=all.filter(Boolean).length+"/"+all.length;
+ $("sNext").textContent=fo<7?String(fo+1):"✓";
+ $("sample").hidden=S.touched;
+}
+function renderDetail(){
+ const i=S.active,s=STEPS[i];
+ $("dTitle").textContent=`Schritt ${i+1} · ${s.n}`;
+ $("dGate").hidden=!s.star;
+ $("dMeta").textContent=`Richtwert ${s.aufwand} · Ergebnis: ${s.ergebnis}`;
+ $("dZiel").textContent=s.ziel;
+ $("dTasks").innerHTML=s.t.map(t=>`<li><span>${esc(t)}</span></li>`).join("");
+ $("dKv").innerHTML=`<dt>Vorlage</dt><dd><code>${esc(s.vorlage)}</code></dd><dt>Ergebnis</dt><dd>${esc(s.ergebnis)}</dd>`;
+ $("dChecks").innerHTML=s.g.map((g,k)=>`<label class="chk"><input type="checkbox" data-k="${k}" id="g${i}-${k}" ${S.checks[i][k]?"checked":""}><span>${esc(g)}</span></label>`).join("");
+ const n=S.checks[i].filter(Boolean).length;
+ $("dCount").textContent=n===s.g.length?"Gate erfüllt":`${n}/${s.g.length}`;
+ $("dCount").style.color=n===s.g.length?"var(--ok)":"";
+ $("dPrompt").textContent=s.p;
+ $("prev").disabled=i===0;$("prev").style.opacity=i===0?.4:1;
+ $("next").textContent=i===6?"Zum Reifegrad →":"Nächster Schritt →";
+}
+$("pipe").addEventListener("click",e=>{const b=e.target.closest(".node");if(!b)return;S.active=+b.dataset.i;save();renderPipe();renderDetail();$("ablauf").scrollIntoView({behavior:"smooth",block:"start"})});
+$("dChecks").addEventListener("change",e=>{const k=e.target.dataset.k;if(k==null)return;S.checks[S.active][+k]=e.target.checked;S.touched=true;save();renderPipe();renderDetail()});
+$("prev").onclick=()=>{if(S.active>0){S.active--;save();renderPipe();renderDetail()}};
+$("next").onclick=()=>{if(S.active<6){S.active++;save();renderPipe();renderDetail()}else $("reifegrad").scrollIntoView({behavior:"smooth"})};
+let armed=false;
+$("reset").onclick=()=>{const b=$("reset");if(!armed){armed=true;b.textContent="Wirklich alles leeren?";setTimeout(()=>{armed=false;b.textContent="Zurücksetzen"},3000);return}
+ armed=false;b.textContent="Zurücksetzen";const ex=example();S.checks=STEPS.map(s=>s.g.map(()=>false));S.rg=RG.map(r=>r[1].map(()=>false));S.active=0;S.touched=true;S.sb=ex.sb;save();renderAll()};
+
+async function copy(text,btn,pre){
+ const old=btn.textContent;
+ try{await navigator.clipboard.writeText(text);btn.textContent="Kopiert ✓"}
+ catch(e){if(pre){const r=document.createRange();r.selectNodeContents(pre);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}btn.textContent="Markiert – Strg+C"}
+ setTimeout(()=>btn.textContent=old,1800);
+}
+$("copyPrompt").onclick=()=>copy($("dPrompt").textContent,$("copyPrompt"),$("dPrompt"));
+$("copyCmd").onclick=()=>copy($("cmdTxt").textContent,$("copyCmd"),$("cmdTxt"));
+$("copyOut").onclick=()=>copy($("outPre").textContent,$("copyOut"),$("outPre"));
+
+const chips=(id,key,list)=>{$(id).innerHTML=list.map(it=>{const v=Array.isArray(it)?it[0]:it,l=Array.isArray(it)?it[1]:it;return `<label><input type="checkbox" data-key="${key}" value="${esc(v)}" ${S.sb[key].includes(v)?"checked":""}><span>${esc(l)}</span></label>`}).join("")};
+const slug=s=>s.toLowerCase().replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"pilot";
+const q=s=>/[:#\[\]{},&*?|<>=!%@`'"]/.test(s)?JSON.stringify(s):s;
+function genYaml(b){
+ const ks=KINDS.filter(k=>b.kinds.includes(k[0])),pid=slug(b.pilot);
+ return `# Feature-Katalog: ${b.name}
+schemaVersion: 2
+profiles: [${b.prof.join(", ")}]
+
+kinds:
+${ks.map(k=>`  - id: ${k[0]}\n    title: ${q(k[1])}\n    match: ${k[2]}\n    source: catalog/discovered/${k[0]}.json`).join("\n")||"  []"}
+
+channels: [${b.ch.join(", ")}]
+roles: []
+
+areas:
+  - id: ${pid}
+    title: ${q(b.pilot)}
+    summary: Pilotbereich – ein Satz zum Aufgabenfeld.
+    status: offen
+    owns:
+${ks.map(k=>`      ${k[0]}: []`).join("\n")||"      {}"}
+    groups:
+      - id: ${pid}.grundlagen
+        title: Grundlagen
+        summary: Ein Satz zur Gruppe.
+
+  - id: katalog
+    title: Feature-Katalog
+    summary: Wie dieser Katalog geprüft und erzeugt wird.
+    status: offen
+    owns: {}
+    groups:
+      - id: katalog.pruefung
+        title: Prüfung und Ansicht
+        summary: Abgleich mit Code und Testberichten.
+
+exclusions: {}
+`}
+function genMd(b){
+ const ks=KINDS.filter(k=>b.kinds.includes(k[0])),lv=$("sbLevel").selectedOptions[0].textContent;
+ return `# Steckbrief Feature-Katalog: ${b.name}
+
+| | |
+|---|---|
+| Stand | ${new Date().toISOString().slice(0,10)} |
+| Profil(e) | ${b.prof.join(", ")||"❓"} |
+| Zielreifegrad | ${lv} |
+| Pilotbereich | ${b.pilot} |
+
+## Bedienwege
+| Bedienweg | |
+|---|---|
+${b.ch.map(c=>`| \`${c}\` | ❓ |`).join("\n")}
+
+## Schnittstellenarten
+| kind | Titel | match | Erkennung | |
+|---|---|---|---|---|
+${ks.map(k=>`| \`${k[0]}\` | ${k[1]} | \`${k[2]}\` | Export-Test → catalog/discovered/${k[0]}.json | ❓ |`).join("\n")}
+
+**Erkennungslücken:** –
+
+## Nachweise
+| Testart | zählt | |
+|---|---|---|
+${TESTS.map(t=>`| \`${t}\` | ${b.tests.includes(t)?(t==="unit"?"nur reine Logik":t==="manual"?"nur mit Protokoll":"ja"):"nein"} | ❓ |`).join("\n")}
+
+## Offene Fragen
+1. Rollen: aus dem Code ableitbar oder von Hand?
+`}
+function renderOut(){
+ const b=S.sb;
+ $("outPre").textContent=S.tab==="yaml"?genYaml(b):genMd(b);
+ document.querySelectorAll("#tabs button").forEach(t=>t.setAttribute("aria-selected",t.dataset.t===S.tab));
+ $("cmdTxt").textContent="skills/feature-katalog/vorgehen/scaffold.sh /pfad/zum/"+slug(b.name);
+}
+function renderForm(){
+ $("sbName").value=S.sb.name;$("sbPilot").value=S.sb.pilot;$("sbLevel").value=S.sb.level;
+ chips("sbProf","prof",PROF);chips("sbCh","ch",CH);chips("sbKinds","kinds",KINDS);chips("sbTests","tests",TESTS);
+}
+$("sb").addEventListener("input",e=>{const t=e.target;
+ if(t.dataset.key){const a=S.sb[t.dataset.key];const i=a.indexOf(t.value);if(t.checked&&i<0)a.push(t.value);if(!t.checked&&i>=0)a.splice(i,1)}
+ else if(t.id==="sbName")S.sb.name=t.value.slice(0,80);else if(t.id==="sbPilot")S.sb.pilot=t.value.slice(0,80);else if(t.id==="sbLevel")S.sb.level=t.value;
+ save();renderOut()});
+$("sb").addEventListener("submit",e=>e.preventDefault());
+$("tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;S.tab=b.dataset.t;save();renderOut()});
+
+function renderRg(){
+ let lv=0;for(let i=0;i<RG.length;i++){if(S.rg[i].every(Boolean))lv=i+1;else break}
+ $("lvl").textContent=lv;
+ $("lvlName").textContent=lv?RG[lv-1][0]:"Noch keine Stufe erreicht";
+ $("lvlSteps").innerHTML=RG.map((r,i)=>`<i class="${i<lv?"on":""}" style="height:${20+i*20}%"></i>`).join("");
+ $("rgList").innerHTML=RG.map((r,i)=>`<div class="rgrow"><h3>${esc(r[0])} <small>Stufe ${i+1}</small></h3>${r[1].map((c,k)=>`<label class="chk"><input type="checkbox" data-i="${i}" data-k="${k}" id="rg${i}-${k}" ${S.rg[i][k]?"checked":""}><span>${esc(c)}</span></label>`).join("")}</div>`).join("");
+}
+$("rgList").addEventListener("change",e=>{const t=e.target;if(t.dataset.i==null)return;S.rg[+t.dataset.i][+t.dataset.k]=t.checked;save();renderRg()});
+
+$("kitList").innerHTML=KIT.map(k=>`<div><code>${esc(k[0])}</code><p>${esc(k[1])}</p></div>`).join("");
+function renderAll(){renderPipe();renderDetail();renderForm();renderOut();renderRg()}
+renderAll();
+}
+</script>
