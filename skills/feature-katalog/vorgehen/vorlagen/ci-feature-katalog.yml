@@ -1,0 +1,38 @@
+# Entwurf für .github/workflows/feature-katalog.yml – an die Testjobs des Projekts anpassen.
+# Prinzip: jede Testart liefert einen JUnit-Bericht; der Katalog-Job hängt von allen ab.
+name: feature-katalog
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: Laufzeit einrichten (setup-python / setup-java / setup-node)
+      # TODO: je Testart einen Bericht erzeugen, z. B.:
+      #   pytest -m "not integration" --junitxml=reports/unit-junit.xml
+      #   pytest -m integration       --junitxml=reports/integration-junit.xml
+      #   ./mvnw -B verify   (Surefire/Failsafe → target/*-reports)
+      #   npx vitest run --reporter=junit --outputFile=reports/js-junit.xml
+      # Export-Tests (catalog/discovered/) laufen mit und schlagen bei veralteten Dateien fehl.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: reports, path: reports }
+
+  katalog:
+    needs: [tests]
+    if: always()                       # auch bei roten Tests prüfen → zeigt EVIDENCE_FAILED
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: reports, path: reports }
+      # TODO: Werkzeug aufrufen
+      - run: <werkzeug> check --reports reports
+      - run: <werkzeug> build --reports reports --out catalog/dist
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: feature-katalog, path: catalog/dist }

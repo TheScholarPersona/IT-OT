@@ -1,0 +1,13 @@
+# Prüfbestand: Fähigkeiten, die (noch) nicht vollständig nachgewiesen sind.
+# Gleiches Format wie ein Feature plus state und reason (Pflicht) und owner (empfohlen).
+# state: geplant | unvollstaendig | deaktiviert | nicht-nachgewiesen | nicht-einsehbar
+features: []
+#  - id: beispiel.etwas-exportieren
+#    title: Etwas exportieren
+#    group: beispiel.grundlagen
+#    summary: ...
+#    state: nicht-nachgewiesen
+#    reason: Export vorhanden, aber kein Test sichert den Dateiinhalt zu.
+#    owner: team-backend
+#    acceptance: [...]
+#    evidence: []

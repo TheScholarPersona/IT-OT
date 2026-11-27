@@ -15,6 +15,7 @@ Alles Stack-Spezifische steht in **Profilen**:
 
 | Datei | Inhalt | Lesen, wenn … |
 |---|---|---|
+| [vorgehen/README.md](vorgehen/README.md) | **Wiederverwendbarer Ablaufplan:** 7 Schritte mit Gate-Checks, Vorlagen, Agenten-Aufträgen; `vorgehen/scaffold.sh <projekt>` legt das Gerüst an | du in einem Projekt loslegst – **Einstieg** |
 | [references/vorgehensmodell.md](references/vorgehensmodell.md) | Phasen mit Eingaben, Tätigkeiten, Ergebnissen und Gates, Varianten, Rollen, Kennzahlen | du den Katalog einführst oder eine Phase abschließt |
 | [references/datenmodell.md](references/datenmodell.md) | YAML-Schema (`catalog.yaml`, Features, Prüfbestand, Vergleich), Schnittstellenarten | du YAML schreibst oder das Schema baust |
 | [references/nachweisregeln.md](references/nachweisregeln.md) | Akzeptanzkriterien, Nachweisregeln N1–N9, Nachweisstufen, statische Testprüfung | du Nachweise einträgst oder prüfst |

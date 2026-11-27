@@ -1,0 +1,39 @@
+# Feature-Katalog – Gliederung und Konfiguration
+# Schema: skills/feature-katalog/references/datenmodell.md
+schemaVersion: 2
+profiles: []                      # z. B. [python] oder [python, javascript-typescript]
+
+kinds:                            # nur die Schnittstellenarten aus dem Steckbrief
+  - id: endpoint
+    title: HTTP-Endpunkt
+    match: path
+    source: catalog/discovered/endpoint.json
+
+channels: [web, api, entwicklung]
+roles: []                         # leer lassen, wenn aus dem Code abgeleitet
+
+areas:
+  - id: beispiel
+    title: Beispielbereich
+    summary: Ein Satz, welches Aufgabenfeld dieser Bereich abdeckt.
+    status: offen                 # offen | katalogisiert
+    owns:
+      endpoint: []
+    groups:
+      - id: beispiel.grundlagen
+        title: Grundlagen
+        summary: Ein Satz zur Gruppe.
+
+  - id: katalog                   # Selbstbeschreibung, ohne owns
+    title: Feature-Katalog
+    summary: Wie dieser Katalog geprüft und erzeugt wird.
+    status: offen
+    owns: {}
+    groups:
+      - id: katalog.pruefung
+        title: Prüfung und Ansicht
+        summary: Abgleich mit Code und Testberichten.
+
+exclusions: {}
+#  endpoint:
+#    - { item: "GET /health", reason: Betriebsendpunkt, kein Feature }

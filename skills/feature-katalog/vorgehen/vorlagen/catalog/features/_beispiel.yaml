@@ -1,0 +1,42 @@
+# Vorlage für ein Feature. Datei kopieren nach catalog/features/<bereich>.yaml und diese Datei löschen.
+# Reihenfolge beim Ausfüllen: Satz → fachlich → technisch → acceptance → evidence.
+# Satz: "<Rolle> kann <Fähigkeit>, damit <Nutzen>."
+area: beispiel
+features:
+  - id: beispiel.etwas-anlegen          # <bereich>.<kebab-name>, nie wiederverwenden
+    title: Etwas anlegen
+    group: beispiel.grundlagen
+    summary: Ein Satz, was die Fähigkeit leistet.
+    description: |
+      Fachlich, ohne Code-Begriffe: wer, wann, wozu, mit welchem Ergebnis.
+    usage:
+      - channel: api
+        text: "`POST /api/dinge` mit Name; Antwort enthält die neue ID."
+    rules:
+      - Name eindeutig (`409`).
+    dependsOn: []
+    technical:
+      components: [src/pfad/zur/datei.py]
+      parts:
+        endpoint: ["POST /api/dinge"]
+      emits: []
+      consumes: []
+      settings: []
+      notes: []
+    acceptance:
+      - id: ding-angelegt
+        kind: effekt
+        text: Ein angelegtes Ding ist danach mit demselben Namen lesbar.
+      - id: name-eindeutig
+        kind: regel
+        text: Ein bereits vergebener Name wird abgelehnt.
+        code: "409"
+    evidence:
+      - kind: integration
+        file: tests/test_dinge.py
+        test: test_creates_thing_and_reads_it_back
+        covers: [ding-angelegt]
+      - kind: integration
+        file: tests/test_dinge.py
+        test: test_rejects_duplicate_name
+        covers: [name-eindeutig]

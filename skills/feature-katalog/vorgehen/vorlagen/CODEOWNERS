@@ -1,0 +1,6 @@
+# Ausschnitt für .github/CODEOWNERS – Team-Namen anpassen.
+# Fachliche Texte und Nachweise brauchen ein Review durch Produkt bzw. QS.
+/catalog/catalog.yaml     @org/produkt @org/katalog-kuratoren
+/catalog/features/        @org/produkt @org/qs
+/catalog/review.yaml      @org/produkt
+/catalog/discovered/      @org/entwicklung
